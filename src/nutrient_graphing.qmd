@@ -5,18 +5,635 @@ format: html
 editor: visual
 ---
 
-## Goals
+# Goals
 
 This document is to work on graphs related to nutrients from Reservoirs/ Mainstem
 
 ```{r}
 ## This is where i will read in data
+Mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+Mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
+
+SF_Res <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO", "BEAV", "SFM")
+
+Mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
+
+
+All_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+
+Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
+  mutate(Date = as.Date(Date))
+
 ```
 
-## Graphing
+# Graphing
+
+These are collected from grab samples at our reservoir sites. Samples are collected weekly between June and November and analyzed for key nutrients.
+
+## Timeline
 
 ```{r}
-#This is where i will make stunning graphs !
+{r,, include= F, eval=T, warning=F, message=F, fig.width=11.5, fig.height=11,fig.cap= "Key Nutrient Timelines through 2021 and 2022"}
+
+
+nit_table<-filter(Reservoir_Chemistry, Watershed != "Comanche Reservoir" & Watershed != "Hourglass Reservoir"& Year>= "2021")
+
+tdn <- ggplot(filter(nit_table, Location=="Reservoir")) +
+  geom_point(aes(x=Date,y=DTN, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=DTN, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.8, vjust=0.5) +
+  geom_path(aes(x=Date, y=DTN, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "TDN (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(tdn)
+
+#ggsave('data/plot_tdn.jpg',plot=last_plot(), width=14,height=4.5)
+
+no3 <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=NO3, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=NO3, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NO3...26, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.5, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "NO3 (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(no3)
+
+#ggsave('data/plot_no3.jpg',plot=last_plot(), width=14,height=4.5)
+
+k <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=K, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=K, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "K (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x")
+
+#ggplotly(k)
+
+so4 <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=SO4, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=SO4, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "SO4 (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(so4)
+
+po4 <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=PO4, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=PO4, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "PO4 (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x")  
+
+#ggplotly(po4)
+
+sc <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=SC, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=SC, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "SC (uS/cm)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none")+
+  facet_wrap(~Year, scales = "free_x")  
+
+#ggplotly(sc)
+
+doc <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=DOC, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=DOC, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "DOC (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x")  
+
+#ggplotly(doc)
+
+na <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y= Na, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Na, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Na (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(na)
+
+mg <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Mg, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Mg, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Mg (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(mg)
+
+
+ca <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Ca, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Ca, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Ca (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(ca)
+
+f <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=F, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=F, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "F (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(f)
+
+cl <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Cl, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y= Cl, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Cl (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(cl)
+
+#ggarrange(sc,tdn,no3,po4,doc,so4,f,k, na, ca, cl,mg,   ncol=1, nrow=12)#, common.legend=T) 
+
+
+#ggsave('output/nutrient_timeline.jpg', width = 12.5, height = 28)
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+## Reservoir Boxplots
+
+Mimics graphs from 2021 report. Faceted for 2022 data
+
+```{r}
+
+Boxplot_Chem <- filter(Reservoir_Chemistry, Year == "2022"& Site_Code %in% Mainstem_res_set)
+
+Boxplot_Chem_Total <- filter(Reservoir_Chemistry, Year >="2021" & Site_Code %in% Mainstem_res_set)
+
+tdn <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y=DTN, middle=mean(DTN), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  labs(x = "", y = "TDN (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(tdn)
+
+  
+
+
+
+no3 <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = NO3, middle=mean(NO3), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank()) +
+  labs(x = "", y = "NO3 (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(no3)
+
+k <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = K, middle=mean(K), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  labs(x = "", y = "K (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(k)
+
+so4 <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = SO4, middle=mean(SO4), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  labs(x = "", y = "SO4 (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(so4)
+
+po4 <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = PO4, middle=mean(PO4), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  labs(x = "", y = "PO4 (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(po4)
+
+sc <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = SC, middle=mean(SC), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none") +
+  labs(x = "", y = "SC (μS/cm)")+
+  facet_wrap(~Year)
+
+#ggplotly(sc)
+
+
+
+ #ggarrange(sc,tdn,no3,po4,so4,k, ncol=1, nrow=6)#, common.legend=T) 
+ #ggsave('output/nutrient_boxplot.jpg', width = 12.5, height = 16)
+
+#Nutrient_Boxplot <- subplot(sc, tdn, no3, po4, so4, k, nrows = 6, shareY= FALSE , titleY  = TRUE)%>% 
+ # layout(yaxis = list(title = "SC (μS/cm)"), 
+  #       yaxis2 = list(title = "TDN (mg/L)"),
+   #      yaxis3 = list(title = "NO3 (mg/L)"), 
+    #     yaxis4 = list(title = "PO4 (mg/L)"),
+     #    yaxis5 = list(title = "SO4 (mg/L)"), 
+      #   yaxis6 = list(title = "K (mg/L)"))
+#ggplotly(Nutrient_Boxplot)
+
+
+```
+
+## Extra Timeline Figs
+
+```{r, echo = F, include= T, eval=T, warning=F, message=F, fig.width=11.5, fig.height=11,fig.cap="Nutrient concentrations through time at all studied reservoirs. Blue and green colored reservoirs had little or no watershed impact from the Cameron Peak Fire based on both burn severity and extent burned, while yellow to red reservoirs had an increasing impact from the fire."}
+
+
+
+
+pH <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_point(aes(x=Date,y=pH, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=DTN, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.8, vjust=0.5) +
+  geom_path(aes(x=Date, y=pH, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "pH") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(pH)
+
+#ggsave('data/plot_tdn.jpg',plot=last_plot(), width=14,height=4.5)
+
+turb <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Turbidity, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Turbidity, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NO3...26, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.5, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Turbidity (NTU)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x")
+
+#ggplotly(turb)
+
+#ggsave('data/plot_no3.jpg',plot=last_plot(), width=14,height=4.5)
+
+doc <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=DOC, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=DOC, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "DOC (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none")+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(doc)
+
+
+na <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Na, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Na, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Na (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(na)
+
+mg <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Mg, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Mg, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Mg (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(mg)
+
+
+ca <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Ca, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Ca, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "", y = "Ca (uS/cm)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x")  
+
+#ggplotly(ca)
+
+f <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=F, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=F, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "Date", y = "F (uS/cm)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(f)
+
+cl <- ggplot(filter(nit_table, Location =="Reservoir")) +
+  geom_path(aes(x=Date, y=Cl, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(aes(x=Date,y=Cl, color=Watershed_Level), size=3) +
+  #geom_textpath(aes(x=Date, y=NH4...20, group=Site_Code, color=Watershed_Level, size=1, label=Watershed), size=5, fontface=2, hjust=0.25, vjust=0.5) +
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
+  labs(x = "Date", y = "Cl (mg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  facet_wrap(~Year, scales = "free_x") 
+
+#ggplotly(cl)
+
+#ggarrange(doc,na,mg,ca,f,cl, ncol=1, nrow=6)
+
+#ggsave('output/extras_timeline_p2.jpg', width = 12.5, height = 16)
+
+```
+
+## Extra Boxplot Figs
+
+```{r, echo = F, include= T, eval=T, warning=F, message=F, fig.width=11.5, fig.height=11, fig.cap="Boxplots of nutrient concentrations at each site through the 2021 field season. The mean concentration is displayed as the line on each boxplot. Watershed burn intensity increases across the x-axis."}
+tdn <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y=DTN, middle=mean(DTN), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none") +
+  labs(x = "", y = "TDN (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(tdn)
+
+
+no3 <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = NO3, middle=mean(NO3), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "NO3 (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(no3)
+
+k <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = K, middle=mean(K), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "K (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(k)
+
+so4 <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = SO4, middle=mean(SO4), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "SO4 (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(so4)
+
+po4 <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = PO4, middle=mean(PO4), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "PO4 (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(po4)
+
+sc <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = SC, middle=mean(SC), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none")  +
+  labs(x = "", y = "SC (μS/cm)")+
+  facet_wrap(~Year)
+
+#ggplotly(sc)
+
+na <- ggplot() +
+  geom_boxplot(data= Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y=Na, middle=mean(Na), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "Na (mg/L)") +
+  facet_wrap(~Year)
+
+#ggplotly(na)
+
+
+doc <- ggplot() +
+  geom_boxplot(data= Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = DOC, middle=mean(DOC), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "DOC (mg/L)")+
+  facet_wrap(~Year) 
+
+#ggplotly(doc)
+
+
+mg <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = Mg, middle=mean(Mg), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "Mg (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(mg)
+
+ca <- ggplot() +
+  geom_boxplot(data= Boxplot_Chem_Total ,aes(x=reorder(Site_Code,order,max),y = Ca, middle=mean(Ca), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "", y = "Ca (mg/L)")+
+  facet_wrap(~Year)
+
+#ggplotly(ca)
+
+f <- ggplot() +
+  geom_boxplot(data= Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = F, middle=mean(F), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank()) +
+  labs(x = "Site", y = "F (mg/L)")+
+  facet_wrap(~Year) 
+
+#ggplotly(f)
+
+cl <- ggplot() +
+  geom_boxplot(data=Boxplot_Chem_Total,aes(x=reorder(Site_Code,order,max),y = Cl, middle=mean(Cl), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15)+
+  theme(legend.position = "none", 
+  strip.background = element_blank(),
+  strip.text.x = element_blank())  +
+  labs(x = "Site", y = "Cl (mg/L)")+
+  facet_wrap(~Year) 
+
+#ggplotly(cl)
+
+
+#ggarrange(sc,tdn,no3,po4,so4,k,doc,na,mg,ca,f,cl, ncol=2, nrow=6)
+#ggsave('output/nutrient_boxplot_p2.jpg', width = 25, height = 32)
+```
+
+## Conclusions!
+
+This is the end of the document.

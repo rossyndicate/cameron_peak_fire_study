@@ -1,0 +1,419 @@
+---
+title: "chla_graphing"
+format: html
+editor: visual
+---
+
+## Goals
+
+This document is to work on graphs related to nutrients from Reservoirs/ Mainstem
+
+### Importing
+
+```{r}
+## This is where i will read in data
+Mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+Mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
+
+SF_Res <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO", "BEAV", "SFM")
+
+Mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
+
+
+All_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+
+Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
+  mutate(Date = as.Date(Date))
+
+```
+
+# Chl-A Plots
+
+## Goals:
+
+-   Replicate Katie's Plots from last year for this year's data
+
+-   Facet the 2 years to compare them to each other
+
+-   New graph ideas?
+
+## Longitudinal Chl-A and NO3
+
+#### DF Set Up
+
+```{r}
+
+#Longitudinal chla
+
+Main_res_chla_day <- Reservoir_Chemistry %>%
+  dplyr::filter(!is.na(ChlA)) %>%
+  dplyr::group_by(Distance,Lat,Long,Watershed_Level) %>%
+  dplyr::filter(!Distance %in% c('6','7','8','9','99','999',NA)) %>%
+  dplyr::filter(Date == "2022-06-01"|
+                Date == "2022-06-14"|
+                Date == "2022-07-05"|
+                Date == "2022-07-26"|
+                Date == "2022-08-30") %>%
+mutate(Date=as.character(Date))
+
+
+
+SF_res_chla_day <- Reservoir_Chemistry %>%
+  dplyr::filter(!is.na(ChlA)) %>%
+  dplyr::group_by(Distance,Lat,Long,Watershed_Level) %>%
+  dplyr::filter(!Distance %in% c('1 - JOEI','2 - JOER','3 - CBRI','4 - CBRR','5 - CHD','6','7','8','9','99','999',NA)) %>%
+  dplyr::filter(Date == "2021-07-09"|
+                Date == "2021-09-21"|
+                Date == "2022-06-29"|
+                Date == "2022-07-18"|
+                Date == "2022-08-31") %>%
+mutate(Date=as.character(Date))
+
+
+
+Mainstem_chla_day <- Reservoir_Chemistry %>%
+  dplyr::filter(!is.na(ChlA)) %>%
+  dplyr::group_by(Distance,Lat,Long,Watershed_Level) %>%
+  dplyr::filter(!Distance %in% c('1 - JOEI','2 - JOER','3 - CBRI','4 - CBRR','5 - CHD','6','7','8','9','99','999','11 - COMI','12 - COMR','13 - COMO','14 - HORI','15 - HORR','16 - HORO','17 - BEAV',NA)) %>%
+  dplyr::filter(Date == "2022-05-16"|
+                Date == "2022-05-31"|
+                Date == "2022-06-07"|
+                Date == "2022-07-11"|
+                Date == "2022-07-25"|
+                Date == "2022-08-08"|
+                Date == "2022-08-26") %>%
+mutate(Date=as.character(Date))
+
+
+
+
+
+```
+
+### Mainstem Reservoirs
+
+```{r}
+chla_long <- ggplot() +
+   geom_point(data=Main_res_chla_day, aes(x=Distance, y=ChlA, shape = Location, color=Date), size=5) +
+   geom_line(data=Main_res_chla_day, aes(x=Xdistance, y=ChlA, color=Date), size=1) +
+   geom_point(data=Main_res_chla_day, aes(x=Distance, y=ChlA, shape = Location, color=Date), size=5) +
+   #scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   #scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   theme_bw(base_size=24) +
+   labs(shape = "", color="") +
+   theme(axis.text.x = element_blank()) +
+   xlab("") +
+   ylab("Chlorophyll a (μg/L)")
+
+#ggplotly(chla_long)
+ 
+ no3_long <- ggplot() +
+   geom_point(data=Main_res_chla_day, aes(x=Distance, y=NO3, shape = Location, color=Date), size=5) +
+   geom_line(data=Main_res_chla_day, aes(x=Xdistance, y=NO3, color=Date), size=1) +
+   geom_point(data=Main_res_chla_day, aes(x=Distance, y=NO3, shape = Location, color=Date), size=5) +
+   #scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E'))+
+   #scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   theme_bw(base_size=24) +
+   labs(shape = "", color="") +
+   scale_x_discrete(labels=c("1 - JOEI" = "Above Joe Wright", "2 - JOER" = "", "3 - CBRI" = "",
+                             "4 - CBRR" = "", "5 - CHD" = "Below Chambers")) +
+   #theme(axis.text.x = element_blank()) +
+ xlab("Longitudinal Profile") +
+   ylab("NO3 (mg/L)")
+ plot(no3_long)
+ #ggplotly(no3_long)
+ 
+
+ 
+ggarrange(chla_long,no3_long, ncol=1, nrow=2, common.legend=T)
+ 
+ 
+ #ggsave('output/CHLA_LONG_JOER_CBRR.jpg', width=13.5, height=10)
+```
+
+### South Fork Reservoir
+
+This is an overview of the SF Reservoir network
+
+```{r}
+
+##Chla
+SF_chla_long <- ggplot() +
+   geom_point(data=SF_res_chla_day , aes(x=Distance, y=ChlA, shape = Location, color=Date), size=5) +
+   geom_line(data=SF_res_chla_day, aes(x=Distance, y=ChlA, group = Date ,color=Date), size=1) +
+   geom_point(data=SF_res_chla_day, aes(x=Distance, y=ChlA, shape = Location, color=Date), size=5) +
+   #scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   #scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   theme_bw(base_size=24) +
+   labs(shape = "", color="") +
+   theme(axis.text.x = element_blank()) +
+   xlab("") +
+   ylab("Chlorophyll a (μg/L)")
+
+plot(SF_chla_long)
+
+
+
+
+#NO3
+
+ 
+ SF_no3_long <- ggplot() +
+   geom_point(data= SF_res_chla_day, aes(x=Distance, y=NO3, shape = Location, color=Date), size=5) +
+   geom_line(data=SF_res_chla_day, aes(x=Distance, y=NO3, group = Date, color=Date), size=1) +
+   geom_point(data=SF_res_chla_day, aes(x=Distance, y=NO3, shape = Location, color=Date), size=5) +
+   #scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E'))+
+   #scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   theme_bw(base_size=24) +
+   labs(shape = "", color="") +
+   scale_x_discrete(labels=c("11 - COMI" = "COMI", "12 - COMR" = "COMR", "13 - COMO" = "","14 - HORI" = "HORI", "15 - HORR" = "HORR", "16 - HORO" = "", "17 - BEAV" = "BEAV", "22 - SFM" = "SF")) +
+   #theme(axis.text.x = element_blank()) +
+ xlab("Longitudinal Profile") +
+   ylab("NO3 (mg/L)")
+ 
+ plot(SF_no3_long)
+
+ 
+ ggarrange(SF_chla_long,SF_no3_long, ncol=1, nrow=2, common.legend=T)
+ 
+ 
+ ggsave('output/CHLA_LONG_SF.jpg', width=15, height=10)
+
+
+```
+
+### Mainstem
+
+```{r}
+
+#chla
+
+mainstem_chla_long <- ggplot() +
+   geom_point(data=Mainstem_chla_day , aes(x=Distance, y=ChlA, shape = Location, color=Date), size=5) +
+   geom_line(data=Mainstem_chla_day, aes(x=Distance, y=ChlA, group = Date ,color=Date), size=1) +
+   geom_point(data=Mainstem_chla_day, aes(x=Distance, y=ChlA, shape = Location, color=Date), size=5) +
+   #scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   #scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   theme_bw(base_size=24) +
+   labs(shape = "", color="") +
+   xlab("") +
+   ylab("Chlorophyll a (μg/L)") +
+   scale_x_discrete(labels=c("18 - JWC" = "JWC", "19 - PJW" = "PJW", "20 - SLEP" = "SLEP","21 - PBR" = "PBR", "22 - SFM" = "SFM", "23 - PSF" = "PSF", "24 - PNF" = "PNF", "25 - PBD" = "Canyon Mouth" )) 
+
+plot(mainstem_chla_long)
+
+#no3
+Mainstem_no3_long <- ggplot() +
+   geom_point(data= Mainstem_chla_day, aes(x=Distance, y=NO3, shape = Location, color=Date), size=5) +
+   geom_line(data=Mainstem_chla_day, aes(x=Distance, y=NO3, group = Date, color=Date), size=1) +
+   geom_point(data=Mainstem_chla_day, aes(x=Distance, y=NO3, shape = Location, color=Date), size=5) +
+   #scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E'))+
+   #scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
+   theme_bw(base_size=24) +
+   labs(shape = "", color="") +
+   scale_x_discrete(labels=c("18 - JWC" = "JWC", "19 - PJW" = "PJW", "20 - SLEP" = "SLEP","21 - PBR" = "PBR", "22 - SFM" = "SFM", "23 - PSF" = "PSF", "24 - PNF" = "PNF", "25 - PBD" = "Canyon Mouth" )) +
+   #theme(axis.text.x = element_blank()) +
+ xlab("Longitudinal Profile") +
+   ylab("NO3 (mg/L)")
+ 
+ plot(Mainstem_no3_long)
+ 
+ 
+ ggarrange(mainstem_chla_long, Mainstem_no3_long, ncol=1, nrow=2)
+           #,common.legend=T)
+ ggsave('output/Mainstem_Longitudinal.jpg', width=13.5, height=10)
+ 
+
+```
+
+## Chl-A Timeline and Boxplots
+
+#### DF set up
+
+```{r}
+##Making new DFs for post fire analysis
+
+Reservoir_Chemistry_CPF <-filter(Reservoir_Chemistry, Year >= "2021", Site_Code %in% Mainstem_Res_only)
+
+SF_Reservoir_Chemistry <-filter(Reservoir_Chemistry, Year >= "2022", Site_Code %in% SF_Res)
+
+Mainstem_Chemistry <-filter(Reservoir_Chemistry, Year >= "2022", Site_Code %in% Mainstem_sites )
+```
+
+### Main Res
+
+```{r}
+
+
+
+
+###CHLA TIMELINE GRAPH ####
+chla_timeline <- Reservoir_Chemistry_CPF%>%
+  ggplot() +
+  geom_path(aes(x=Date, y=ChlA, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(data = dplyr::filter(Reservoir_Chemistry_CPF, Location=="Reservoir"), aes(x=Date,y=ChlA, color=Watershed_Level), size=3.5) +
+  
+  geom_textpath(data = dplyr::filter(Reservoir_Chemistry_CPF, Site_Code %in% c("JOER","CBRR","BRNR")), aes(x=Date, y=ChlA, group=Site_Code, color=Watershed_Level, size=3, label=Watershed), size=4.5, fontface=2, hjust=0.9, vjust=0.0) +
+  
+  geom_textpath(data = dplyr::filter(Reservoir_Chemistry_CPF, Site_Code %in% c("LNGR","PTRR")), aes(x=Date,y=ChlA, group=Site_Code, color=Watershed_Level, size=3, label=Watershed), size=4.5, fontface=2, hjust=0.2, vjust=0) +
+  
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  labs(x = "Date", y = " Chlorophyll a (μg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none")+
+  coord_cartesian(ylim=c(0,12))+
+  facet_wrap(~Year, scales = "free_x")
+
+
+###CHLA  BOXPLOT GRAPH ###
+chla_boxplot <- Reservoir_Chemistry_CPF%>%
+ggplot() + 
+  geom_boxplot(aes(x=reorder(Site_Code,order,max),y=ChlA, middle=mean(ChlA), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "Site", y = "Chlorophyll a (μg/L)")+
+  coord_cartesian(ylim=c(0,12))+
+  facet_wrap(~Year, scales = "free_x")
+
+
+
+
+
+###COMBINING AND SAVING GRAPHS###
+
+
+ggarrange(chla_timeline, chla_boxplot, nrow = 2, ncol = 1)
+ggsave('output/chla_main_plot.jpg',width=15,height=10)
+
+```
+
+### SF
+
+```{r}
+###CHLA TIMELINE GRAPH ####
+
+
+SF_chla_timeline <- SF_Reservoir_Chemistry%>%
+  ggplot() +
+  geom_path(aes(x=Date, y=ChlA, group=Site_Code, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(data = SF_Reservoir_Chemistry, aes(x=Date,y=ChlA, color=Watershed_Level), size=3.5) +
+  
+  geom_textpath(data = dplyr::filter(SF_Reservoir_Chemistry, Site_Code %in% c("COMI","COMR","COMO")), aes(x=Date, y=ChlA, group=Site_Code, color=Watershed_Level, size=3, label=Site), size=4.5, fontface=2, hjust=0.2, vjust=0.0) +
+  
+  geom_textpath(data = dplyr::filter(SF_Reservoir_Chemistry, Site_Code %in% c("BEAV", "HORO","SFM")), aes(x=Date,y=ChlA, group=Site_Code, color=Watershed_Level, size=3, label=Site), size=4.5, fontface=2, hjust=0.9, vjust=0) +
+  
+  geom_textpath(data = dplyr::filter(SF_Reservoir_Chemistry, Site_Code %in% c("HORR", "HORI")), aes(x=Date,y=ChlA, group=Site_Code, color=Watershed_Level, size=3, label=Site), size=4.5, fontface=2, hjust=0.5, vjust=0)+
+  
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  labs(x = "Date", y = " Chlorophyll a (μg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none")+
+  coord_cartesian(xlim = c(as.Date("2022-07-01"),as.Date("2022-10-01")),
+                           ylim=c(0,12))
+
+#+  facet_wrap(~Year, scales = "free_x")
+
+plot(SF_chla_timeline)
+
+
+###CHLA  BOXPLOT GRAPH ###
+SF_chla_boxplot <- SF_Reservoir_Chemistry%>%
+ggplot() + 
+  geom_boxplot(aes(x=reorder(Site_Code,order,max),y=ChlA, middle=mean(ChlA), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "Site", y = "Chlorophyll a (μg/L)")+
+  coord_cartesian(ylim=c(0,12))+
+  facet_wrap(~Year, scales = "free_x")
+
+
+plot(SF_chla_boxplot)
+
+
+###COMBINING AND SAVING GRAPHS###
+
+
+ggarrange(SF_chla_timeline, SF_chla_boxplot, nrow = 2, ncol = 1)
+ggsave('output/chla_SF_plot.jpg',width=15,height=10)
+```
+
+### Mainstem
+
+```{r}
+
+###CHLA TIMELINE GRAPH ####
+
+Key_Mainstem_Chemistry <- filter(Mainstem_Chemistry, Site_Code %in% c("JWC","PJW","PBR","PSF","PNF","PBD"))
+
+Mainstem_chla_timeline <- Key_Mainstem_Chemistry%>%
+  ggplot() +
+  geom_path(aes(x=Date, y=ChlA, group=Site_Code, color=order), size=1) +
+  geom_point(data = Key_Mainstem_Chemistry, aes(x=Date,y=ChlA, color=order), size=3.5)+
+  
+  geom_textpath(data = dplyr::filter(Mainstem_Chemistry, Site_Code %in% c("PJW","JWC")), aes(x=Date, y=ChlA, group=Site_Code, color=order, size=3, label=Site_Code), size=4.5, fontface=2, hjust=0.1, vjust=0.0) +
+  
+  geom_textpath(data = dplyr::filter(Mainstem_Chemistry, Site_Code %in% c("PBR", "PSF")), aes(x=Date,y=ChlA, group=Site_Code, color=order, size=3, label=Site_Code), size=4.5, fontface=2, hjust=0.5, vjust=0) +
+  
+  geom_textpath(data = dplyr::filter(Mainstem_Chemistry, Site_Code %in% c("PBD", "PNF")), aes(x=Date,y=ChlA, group=Site_Code, color=order, size=3, label=Site_Code), size=4.5, fontface=2, hjust=0.9, vjust=0)+
+  
+  #scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  labs(x = "Date", y = " Chlorophyll a (μg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none")+
+  coord_cartesian(xlim = c(as.Date("2022-05-01"),as.Date("2022-10-01")),
+    ylim=c(0,5))
+
+#+  facet_wrap(~Year, scales = "free_x")
+
+
+
+
+###CHLA  BOXPLOT GRAPH ###
+Mainstem_chla_boxplot <- Mainstem_Chemistry%>%
+ggplot() + 
+  geom_boxplot(aes(x=reorder(Site_Code,order,max),y=ChlA, middle=mean(ChlA), fill=order)) +
+  #scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "Site", y = "Chlorophyll a (μg/L)")+
+  coord_cartesian(ylim=c(0,5))
+
+#+facet_wrap(~Year, scales = "free_x")
+
+
+
+
+
+###COMBINING AND SAVING GRAPHS###
+
+
+ggarrange(Mainstem_chla_timeline, Mainstem_chla_boxplot, nrow = 2, ncol = 1)
+ggsave('output/chla_Mainstem_plot.jpg',width=15,height=10)
+
+#Longitudinal +Boxplot
+
+ggarrange(mainstem_chla_long, Mainstem_chla_boxplot, nrow = 2, ncol = 1)
+ggsave('output/chla_Mainstem_plot_2.jpg',width=15,height=10)
+
+
+
+
+
+
+```
