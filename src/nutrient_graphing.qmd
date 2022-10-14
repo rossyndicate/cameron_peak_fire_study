@@ -1,0 +1,22 @@
+---
+title: "Nutrient_Graphing"
+author: "Sam Struthers"
+format: html
+editor: visual
+---
+
+## Goals
+
+This document is to work on graphs related to nutrients from Reservoirs/ Mainstem
+
+```{r}
+## This is where i will read in data
+```
+
+## Graphing
+
+```{r}
+#This is where i will make stunning graphs !
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
