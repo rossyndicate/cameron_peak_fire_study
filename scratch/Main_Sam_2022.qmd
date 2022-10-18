@@ -185,10 +185,10 @@ Reservoir_Chemistry <- read_csv('data/CPF_Res_Chem_092122.csv')%>%
   dplyr::arrange(as.factor(Status))
 
 
-write.csv(Reservoir_Chemistry, 
+write_csv(Reservoir_Chemistry, 
           "data/Prepped_Reservoir_Chemistry.csv")
 
-write.csv(filter(Reservoir_Chemistry, Location == "Mainstem"),
+write_csv(filter(Reservoir_Chemistry, Location == "Mainstem"),
           "data/Prepped_Mainstem_Chemistry.csv")
 
 
@@ -218,6 +218,8 @@ Mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
 
 All_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 
+Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
+  mutate(Date = as.Date(Date))
 
 ```
 
@@ -1261,7 +1263,11 @@ Are there any trends across location with respect to chla /nutrients?
 
 -   Chl-A
 
--   SC
+-   PO4
+
+-   SO4
+
+-   K
 
 #### DFs
 

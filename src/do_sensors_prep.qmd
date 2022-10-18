@@ -1,0 +1,210 @@
+---
+title: "DO_Cleaning"
+author: "Sam Struthers"
+format: html
+editor: visual
+---
+
+## DO Cleaning Overview
+
+This document is to clean DO sensor data by comparing it to the City of Fort Collins' PBR and Manners bridge sensors.
+
+## Importing Data
+
+-   pull up libraries
+
+-   pull in location data
+
+-   Pull Mainstem and Reservoir Sensor data
+
+-   Pull field data from handheld sensor
+
+-   Add FCGOV Sensor for correlation
+
+    ```{r, setup, include=FALSE}
+
+    knitr::opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study")
+
+    ```
+
+```{r}
+
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(ggthemes)
+library(scales)
+library(corrplot)
+library(lubridate)
+library(plotly)
+library(dplyr)
+
+
+
+
+#buffer_sbs <- read_csv('data/sbs_buffer.csv') %>%
+ # mutate(Buffer_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))
+
+#watershed_sbs <- read_csv('data/sbs_watershed.csv') %>%
+ # mutate(Watershed_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High)) %>% rename(Site_Code=SITE_CODE)
+
+Sites <- read.csv('data/CPF_Sites.csv')
+
+hrs <- 6 * 60 * 60
+
+DO_Sensors <- read.csv("data/RAW_CPF_DO.csv")%>% 
+mutate(DateTime = as_datetime(DT) - hrs,
+       Site_Code = Site, 
+       Date = as_date(DateTime),
+       Type = "MiniDOT Sensor")%>%
+    filter(Site_Code != "PBR")%>%
+  mutate(Watershed=ifelse(Site_Code %in% c('LNGR','LNGO'),"Long Draw Reservoir",
+                   ifelse(Site_Code %in% c('PTRO','PTRR'),'Peterson Reservoir',
+                   ifelse(Site_Code %in% c('SLEP','JWC','PNF','PBD', 'PJW','PBR', 'SFM','PSF' ),'CLP Mainstem Canyon',
+                   ifelse(Site_Code %in% c('ELC','ARCH', 'LEGC','TIMB' ),'CLP Mainstem Fort Collins',
+                   ifelse(Site_Code %in% c('JOEI','JOER'),"Joe Wright Reservoir",
+                   ifelse(Site_Code %in% c('CBRI', 'CBRR','CHD'), "Chambers Reservoir",
+                   ifelse(Site_Code %in% c('BRNR','BMD'),"Barnes Meadow Reservoir",
+                   ifelse(Site_Code %in% c('COMR','COMO','COMI'),"Comanche Reservoir","Hourglass Reservoir"))))))))) %>%
+  # left_join(select(buffer_sbs,c(Watershed,Buffer_Level)),by="Watershed") %>%
+  #left_join(select(watershed_sbs,c(Site_Code,Watershed_Level)),by="Site_Code") %>%
+  left_join(select(Sites,c(Site_Code,Lat,Long, Campaign)),by="Site_Code") %>%
+  mutate(Season=ifelse(Date <= "2022-06-09", "SPRING",
+                ifelse(Date <= "2022-09-24", "SUMMER", "FALL"))) %>%
+  mutate(Status = ifelse(Site_Code %in% c('LNGR','LNGO','JOEI'),"Unburned",
+                  ifelse(Site_Code %in% c('COMI','COMR','COMO','HORI','HORR','HORO','PTRR','PTRO','CBRR','CHD','BRNR','BMD'), "Burned",                                                                                                            "Partially Burned"))) %>%
+  mutate(Location = ifelse(Site_Code %in% c("LNGR","PTRR","JOER","CBRR","BRNR","COMR","HORR"),"Reservoir",
+                      ifelse(Site_Code %in% c('SLEP','JWC','PNF','PBD', 'PJW','PBR', 'SFM','PSF' ), 'Mainstem',
+                      ifelse(Site_Code %in% c("LNGO","PTRO","CHD","BMD","HORO","COMO"),"Outflow","Inflow"))))
+
+
+
+PBR_DO_10_10_22 <- read.csv("data/PBR_DO_050122_101022.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "", format= "%m/%d/%Y %H:%M"),
+    DO_mg_L = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime)
+  )%>%
+  filter(between(DO_mg_L,5,12))
+
+PBR_TEMP_10_10_22 <- read.csv("data/PBR_TEMP_50122_101022.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "", format= "%Y-%m-%d %H:%M:%S"),
+    Temp_C = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime)
+  )
+
+
+
+Manners_Bridge_DO_10_10_22 <- read.csv("data/Manners_Bridge_DO_50122_101022.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "", format= "%Y-%m-%d %H:%M:%S"),
+    DO_mg_L = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime))%>%
+   filter(between(DO_mg_L,6,13))
+```
+
+## Plotting
+
+First need to look at individual sites to see when sensors were out of the water
+
+### Plotting each sensor compared to PBR or Manners Bridge (City of Fort Collins Sensor)
+
+This will help determine when mainstem sensors were out of the water.
+
+PBR should be used for JOEI, CBRI, CHD, JWC and PJW
+
+Manner's bridge should be used for SFM, PSF, PNF, PBD
+
+```{r}
+
+DO_sensors_DO <- ggplot()+
+  geom_line(data = filter(DO_Sensors, Site_Code == "JOEI" |Site_Code == "CBRI" |Site_Code == "CHD" |Site_Code == "JWC") , aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
+geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
+  theme_bw()
+
+
+
+DO_sensors_temp<- ggplot()+
+ geom_line(data = filter(DO_Sensors, Site_Code == "JOEI" |Site_Code == "CBRI" |Site_Code == "CHD" |Site_Code == "JWC" ), aes( x= DateTime, y = Temp_C, group = Site_Code, color = Site_Code))+
+geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
+  theme_bw()
+
+#Plotting DO / TEMP VS PBR
+
+ggplotly(DO_sensors_DO)
+ggplotly(DO_sensors_temp)
+```
+
+### Cleaning Sensor Data
+
+After visually inspecting the data, DateTimes were determined when the sensor was out of the stream (Cleaning Dates) .The sensor dataframe is filtered to remove these dates. The new dataframe is exported to Clean_CPF_DO_DATE.csv
+
+```{r}
+
+
+Cleaning_Dates <- read.csv("data/DO_Cleaning_dates.csv")%>%
+  mutate(Date_out = as.POSIXct(Date_out, tz= "UTC", format= "%m/%d/%Y %H:%M"),
+         Date_in = as.POSIXct(Date_in, tz= "UTC", format= "%m/%d/%Y %H:%M"))
+
+
+
+
+Cleaned_DO_Sensors <- DO_Sensors
+
+for (i in 1:length(Cleaning_Dates$Site_Code)) {
+  Cleaned_DO_Sensors <- Cleaned_DO_Sensors%>%
+  filter(!(Site_Code ==Cleaning_Dates$Site_Code[i]&
+           (DateTime > Cleaning_Dates$Date_out[i] &
+              DateTime <Cleaning_Dates$Date_in[i])))
+
+}
+
+
+
+
+  Clean_DO_sensors_DO <- ggplot()+
+  geom_line(data = Cleaned_DO_Sensors, aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
+geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
+  theme_bw()
+
+
+  
+
+Clean_TEMP_sensors <- ggplot()+
+  geom_line(data = Cleaned_DO_Sensors, aes( x= DateTime, y = Temp_C, group = Site_Code, color = Site_Code))+
+geom_line(data = PBR_TEMP_10_10_22 , aes( x= DateTime, y = Temp_C ) ,color = "Black")+
+  theme_bw()
+
+#Temp Plot
+
+ggplotly(Clean_TEMP_sensors)
+  
+#DO Plot
+
+ggplotly(Clean_DO_sensors_DO)
+
+
+```
+
+## Exporting Data to CSV
+
+```{r}
+
+Clean_concise_DO <- Cleaned_DO_Sensors%>%
+  select(
+    DateTime,
+    Site_Code,
+    DO_mgL,
+    Temp_C,
+    Campaign,
+    Lat,
+    Long
+  )
+
+write_csv(Clean_concise_DO,"data/Clean_CPF_DO_101222.csv")
+
+```
