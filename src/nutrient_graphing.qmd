@@ -5,11 +5,24 @@ format: html
 editor: visual
 ---
 
-# Goals
+# Set Up
 
 This document is to work on graphs related to nutrients from Reservoirs/ Mainstem
 
 ```{r}
+library(gghighlight)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(ggthemes)
+library(scales)
+library(corrplot)
+library(lubridate)
+library(sf)
+#library(mapview)       Takes time to load, not using it yet
+library(plotly)
+library(geomtextpath)
+library(dplyr)
 ## This is where i will read in data
 Mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 Mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
@@ -22,7 +35,10 @@ Mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
 All_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 
 Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
-  mutate(Date = as.Date(Date))
+  mutate(Date = as.Date(Date),
+         Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow")))
+
+cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
 ```
 
@@ -33,7 +49,7 @@ These are collected from grab samples at our reservoir sites. Samples are collec
 ## Timeline
 
 ```{r}
-{r,, include= F, eval=T, warning=F, message=F, fig.width=11.5, fig.height=11,fig.cap= "Key Nutrient Timelines through 2021 and 2022"}
+{r, include= F, eval=T, warning=F, message=F, fig.width=11.5, fig.height=11,fig.cap= "Key Nutrient Timelines through 2021 and 2022"}
 
 
 nit_table<-filter(Reservoir_Chemistry, Watershed != "Comanche Reservoir" & Watershed != "Hourglass Reservoir"& Year>= "2021")
@@ -225,6 +241,53 @@ cl <- ggplot(filter(nit_table, Location =="Reservoir")) +
 
 
 #ggsave('output/nutrient_timeline.jpg', width = 12.5, height = 28)
+```
+
+### 2022 NO3 PULSE TIMELINE
+
+```{r}
+
+
+NO3_Graph_2022 <-  ggplot(filter(Reservoir_Chemistry, Site_Code %in% c("CBRR","CHD","JOEI", "JOER", "CBRI", "BRNR" ,"BMD")& Year >2020))+
+  geom_point(aes(x=Date, y = NO3, color=Watershed, shape=Watershed), size= 2)+
+  geom_line(aes(x=Date, y = NO3, group=Site_Code, color = Watershed))+
+ # geom_textpath(data = dplyr::filter(Reservoir_Chemistry, Site_Code %in% c("JOER","JOEI")& Year == 2022), aes(x=Date, y=NO3, group=Site_Code, color=Buffer_Level, size=3, label=Watershed), size=4, fontface=2, hjust=0.9, vjust=0.0) +
+ # geom_textpath(data = dplyr::filter(Reservoir_Chemistry, Site_Code %in% c("CBRR","CBRI","CHD")& Year == 2022), aes(x=Date, y=NO3, group=Site_Code, color=Buffer_Level, size=3, label=Watershed), size=4, fontface=2, hjust=0.1, vjust=0.0) 
+  scale_fill_manual(values = cbbPalette )+
+#scale_color_gradient2(name="Res. Burn  Severity Index (0-1)",
+                        #low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        #guide="colourbar", midpoint=0.225, limits=c(0,0.45576),)+
+#facet_wrap(~Year, scales ="free_x")+
+coord_cartesian(ylim=c(0,2))+
+facet_wrap(~Location + Year, scales = "free_x", ncol = 2, nrow = 3)+
+theme_bw()+
+  theme(#legend.position = "none", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold")) +
+#ggtitle("NO3 in CPF Reservoirs 2021-2022")+
+ylab("NO3 (mg/L)")
+
+plot(NO3_Graph_2022)
+ggsave("output/Facet_NO3_JW_CHAMBERS.jpg", width = 11, height = 9)
+
+NO3_Graph_2021 <-  ggplot(filter(Reservoir_Chemistry, Site_Code %in% c("BMD", "BRNR","CBRR","CHD","JOEI", "JOER", "CBRI")& Year == 2021))+
+  geom_point(aes(x=Date, y = NO3, color=Watershed_Level, shape=Watershed), size= 2)+
+  geom_line(aes(x=Date, y = NO3, group=Site_Code, color = Watershed_Level))+
+scale_color_gradient2(name="Res. Burn  Severity Index (0-1)",
+                        low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),)+
+#facet_wrap(~Year, scales ="free_x")+
+coord_cartesian(ylim=c(0,2))+
+theme_bw()+
+  theme(legend.position = "right", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold")) +
+#ggtitle("NO3 in CPF Reservoirs 2021-2022")+
+ylab("NO3 (mg/L)")
+   
+#theme(text = element_text(size = 30))
+
+plot(NO3_Graph_2021)
 ```
 
 ## Reservoir Boxplots
@@ -632,6 +695,344 @@ cl <- ggplot() +
 
 #ggarrange(sc,tdn,no3,po4,so4,k,doc,na,mg,ca,f,cl, ncol=2, nrow=6)
 #ggsave('output/nutrient_boxplot_p2.jpg', width = 25, height = 32)
+```
+
+# Trends across Location
+
+Are there any trends across location with respect to chla /nutrients?
+
+-   NO3
+
+-   Chl-A
+
+-   PO4
+
+-   SO4
+
+-   K
+
+#### DFs
+
+```{r}
+Reservoir_systems_Chemistry <- filter(Reservoir_Chemistry,
+                                      Site_Code %in% All_res_system 
+                                      & Year >= "2021" 
+                                      & !is.na(ChlA))%>%
+  mutate(Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow")))
+
+
+
+
+
+```
+
+### Chl-A + SC + NO3
+
+```{r}
+
+##Chl-A grouped
+In_Res_out_chla <- Reservoir_systems_Chemistry%>%
+  ggplot(aes(x=reorder(Site_Code,order,max),y=ChlA, group= Site_Code, fill = Watershed_Level))+
+  geom_boxplot(aes(x=reorder(Site_Code,order,max),y=ChlA, middle=mean(ChlA), fill= Watershed_Level))+
+  geom_dotplot(stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .1, dotsize = 2)+
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+  theme_bw(base_size = 10)+
+   theme(legend.position = "none", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold"),
+         strip.text.x = element_text(size = 12)) +
+  coord_cartesian(ylim=c(0,12))+
+  labs(x ="Site", y="Chl-A (mg/L)")+
+  facet_wrap(~Location, scales= "free_x") 
+
+#plot(In_Res_out_chla)
+
+
+#ggsave("output/CHLA_Grouped_Sites.jpg", width = 16, height = 9 )
+
+
+
+##NO3
+
+
+In_Res_out_NO3_Grouped <- Reservoir_systems_Chemistry%>%
+  ggplot()+
+  geom_boxplot(aes(x=reorder(Location,order,max),y=NO3, middle=mean(NO3), fill= Location))+
+  geom_dotplot(aes(x=reorder(Location,order,max),y= NO3, fill= Location), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .04, dotsize = 1, alpha =.8)+
+  scale_fill_manual(values = c("#56B4E9", "#F0E442", "#D55E00"))+
+    theme_bw()+ 
+   theme(legend.position = "none", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold")) +
+  labs( x = "", y = "NO3 (mg/L)")
+  
+
+#plot(In_Res_out_NO3_Grouped)
+
+
+#K
+In_Res_out_K_Grouped <- Reservoir_systems_Chemistry%>%
+  ggplot()+
+  geom_boxplot(aes(x=reorder(Location,order,max),y=K, middle=mean(K), fill= Location))+
+  geom_dotplot(aes(x=reorder(Location,order,max),y= K, fill= Location), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .1, dotsize = .25)+
+  scale_fill_manual(values = c("#56B4E9", "#F0E442", "#D55E00"))+
+    theme_bw()+ 
+   theme(legend.position = "none", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold")) +
+  labs( x = "", y = "K (mg/L)")
+
+#plot(In_Res_out_K_Grouped)
+
+#SO4
+In_Res_out_SO4_Grouped <- Reservoir_systems_Chemistry%>%
+  ggplot()+
+  geom_boxplot(aes(x=reorder(Location,order,max),y=SO4, middle=mean(SO4), fill= Location))+
+  geom_dotplot(aes(x=reorder(Location,order,max),y= SO4, fill= Location), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .2, dotsize = 2)+
+  scale_fill_manual(values = c("#56B4E9", "#F0E442", "#D55E00"))+
+    theme_bw()+ 
+   theme(legend.position = "none", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold")) +
+  labs( x = "Site Type", y = "SO4 (mg/L)")
+
+#plot(In_Res_out_SO4_Grouped)
+
+# NH4
+In_Res_out_NH4_Grouped <- Reservoir_systems_Chemistry%>%
+  ggplot()+
+  geom_boxplot(aes(x=reorder(Location,order,max),y=NH4, middle=mean(NH4), fill= Location), alpha = 1)+
+  geom_dotplot(aes(x=reorder(Location,order,max),y= NH4, fill= Location), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .005, dotsize = 2, alpha = .5)+
+  scale_fill_manual(values = c("#56B4E9", "#F0E442", "#D55E00"))+
+    theme_bw()+ 
+   theme(legend.position = "none", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold")) +
+  labs( x = "Site Type", y = "NH4 (mg/L)") 
+
+#plot(In_Res_out_NH4_Grouped)
+
+
+## Chl-A grouped by location
+
+
+In_Res_out_chla_grouped <- Reservoir_systems_Chemistry%>%
+  ggplot()+
+  
+  geom_boxplot(aes(x=reorder(Location,order,max),y= ChlA, middle=mean(ChlA), fill= Location))+
+ # geom_violin(aes(x=reorder(Location,order,max),y= ChlA, middle=mean(ChlA), fill= Location),alpha = .5)+
+  geom_dotplot(aes(x=reorder(Location,order,max),y= ChlA, fill= Location), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .1, dotsize = 2)+
+  
+  scale_fill_manual(values = c("#56B4E9", "#F0E442", "#D55E00"))+
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+  theme_bw()+ 
+  theme(legend.position = "none", 
+         axis.text=element_text(size=12),
+         axis.title=element_text(size=14,face="bold")) +
+  labs( x = "", y = "Chlorophyll a (μg/L)")+
+  coord_cartesian(ylim=c(0,12))
+  #facet_wrap(~Variable, scales= "free",nrow = 2, ncol = 6) 
+
+plot(In_Res_out_chla_grouped)
+
+ggsave("output/Location_Grouped_Chla_Boxplot.jpg", width = 11, height = 9)
+
+# Plotting SO4, NO3, CHLA, K together
+
+#ggarrange(In_Res_out_chla_grouped,In_Res_out_NO3_Grouped,In_Res_out_K_Grouped,In_Res_out_SO4_Grouped, In_Res_out_NH4_Grouped, ncol= 1, nrow = 5)
+
+#ggsave("output/Nutrients_Grouped_Location.jpg", width = 15, height = 20, units= "in")
+
+
+# Plot CHLA, NO3, K
+  ggarrange(In_Res_out_chla_grouped,In_Res_out_NO3_Grouped, In_Res_out_NH4_Grouped, ncol= 1, nrow = 3)
+ggsave("output/Nutrients_Grouped_Location_split1.jpg", width = 15, height = 20, units= "in")
+
+ggarrange(In_Res_out_chla_grouped,In_Res_out_K_Grouped, In_Res_out_SO4_Grouped, ncol= 1, nrow = 3)
+ggsave("output/Nutrients_Grouped_Location_split2.jpg", width = 15, height = 20, units= "in")
+
+```
+
+## Annual data side by side
+
+```{r}
+
+#Chla MDL .05 mg/L
+Reservoir_Chemistry_Study <- filter(Reservoir_Chemistry, Site_Code %in% Mainstem_res_set & Year >2020)%>%
+  mutate(site_year = paste(Site_Code, Year, sep = " "),
+         MonthDay = format(as.Date(Date), "%m-%d"))
+
+chla_boxplot <- Reservoir_Chemistry_Study%>%
+ggplot() + 
+  
+  geom_boxplot(aes(x=reorder(site_year,order,max),y=ChlA, middle=mean(ChlA), fill=Watershed_Level)) +
+  geom_rect(data=Reservoir_Chemistry_Study, inherit.aes=FALSE, aes(xmin="LNGR 2021", xmax="LNGO 2022", ymin=-.5,
+                ymax=0), color="transparent", fill="#0072B2", alpha=0.01)+
+  geom_rect(data=Reservoir_Chemistry_Study, inherit.aes=FALSE, aes(xmin="JOEI 2021", xmax="JOER 2022", ymin=-.5,
+                ymax=0), color="transparent", fill="#56B4E9", alpha=0.01)+
+  geom_rect(data=Reservoir_Chemistry_Study, inherit.aes=FALSE, aes(xmin="CBRI 2021", xmax="CHD 2022", ymin=-.5,
+                ymax= 0), color="transparent", fill="#F0E442", alpha=0.01)+
+  geom_rect(data=Reservoir_Chemistry_Study, inherit.aes=FALSE, aes(xmin="PTRR 2021", xmax="PTRO 2022", ymin=-.5,
+                ymax=0), color="transparent", fill="#E69F00", alpha=0.01)+
+  geom_rect(data=Reservoir_Chemistry_Study, inherit.aes=FALSE, aes(xmin="BRNR 2021", xmax="BMD 2022", ymin=-.5,
+                ymax=0), color="transparent", fill="#D55E00", alpha=0.01)+
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept=0.05), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+  annotate(geom="text", label= "MDL Limit (μg/L)", x="CBRR 2022", y=.1, vjust= -1)+
+  annotate(geom="text", label= "State Limit (μg/L)", x="JOEI 2021", y=2.6, vjust= -1)+
+  annotate(geom="text", label= "Eutrophic Conditions (μg/L)", x="LNGR 2022", y=8, vjust= -1)+
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "Site", y = "Chlorophyll a (μg/L)")+
+  coord_cartesian(ylim=c(0,12))+
+  scale_x_discrete(labels = function(site_year) str_wrap(site_year, width = 2))
+   
+
+plot(chla_boxplot)
+
+ggsave("output/chla_Boxplot_side_side.jpg", width = 15, height =9)
+
+#CHLA timeline
+
+chla_timeline <- Reservoir_Chemistry_Study%>%
+  ggplot() +
+  geom_path(aes(x=MonthDay, y=ChlA, group=site_year, color=Watershed_Level, label=Watershed), size=1) +
+  geom_point(data = dplyr::filter(Reservoir_Chemistry_Study, Location=="Reservoir"), aes(x=MonthDay,y=ChlA, color=Watershed_Level), size=3.5) +
+  gghighlight(Site_Code == "CBRR")+
+  #geom_textpath(data = dplyr::filter(Reservoir_Chemistry_Study, Site_Code %in% c("JOER","CBRR","BRNR")), aes(x=Date, y=ChlA, group=site_year, color=Watershed_Level, size=3, label=Watershed), size=4.5, fontface=2, hjust=0.9, vjust=0.0) +
+  
+  #geom_textpath(data = dplyr::filter(Reservoir_Chemistry_Study, Site_Code %in% c("LNGR","PTRR")), aes(x=Date,y=ChlA, group=site_year, color=Watershed_Level, size=3, label=Watershed), size=4.5, fontface=2, hjust=0.2, vjust=0) +
+  
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  labs(x = "Date", y = " Chlorophyll a (μg/L)") +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none")+
+  coord_cartesian(ylim=c(0,15))
+  #facet_wrap(~Year, scales = "free_x")
+
+#plot(chla_timeline)
+
+ggsave("output/chla_timeline_side_side.jpg", width = 11, height = 9)
+```
+
+## NO3/K ratio
+
+```{r}
+
+res_chem_k_no3 <- filter(Reservoir_Chemistry, Site_Code %in% Mainstem_res_set & Year >2020)%>%
+  mutate(k_no3 = K/NO3,
+         no3_k = NO3/K,
+         site_year = paste(Site_Code, Year, sep = " "))
+
+k_no3 <- res_chem_k_no3%>%
+  ggplot()+
+geom_boxplot(aes(x=reorder(site_year,order,max),y=k_no3, middle=mean(k_no3), fill=Watershed_Level))+
+  scale_fill_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "Site", y = "k_no3")+
+  scale_x_discrete(labels = function(site_year) str_wrap(site_year, width = 2))
+
+#plot(k_no3)
+
+no3_k <- res_chem_k_no3%>%
+  ggplot()+
+geom_boxplot(aes(x=reorder(site_year,order,max),y=no3_k, middle=mean(no3_k), fill=Watershed_Level))+
+  scale_fill_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "Site", y = "no3_k")+
+  scale_x_discrete(labels = function(site_year) str_wrap(site_year, width = 2))
+
+#plot(no3_k)
+
+
+#ggarrange(no3_k, k_no3, ncol = 1, nrow = 2)
+
+no3_vs_k <- res_chem_k_no3%>%
+  ggplot()+
+  geom_point(aes(x= K, y= NO3, color= Watershed_Level))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "K", y = "NO3")
+ggsave("test_fig/K_vs_no3.jpg", width = 11, height = 9)
+
+k_vs_chla <- res_chem_k_no3%>%
+  ggplot()+
+  geom_point(aes(x= K, y= ChlA, color= Watershed_Level))+
+  geom_smooth(aes(x= K, y= ChlA))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "K", y = "ChlA")
+ggsave("test_fig/K_vs_chla.jpg", width = 11, height = 9)
+
+no3_vs_chla <- res_chem_k_no3%>%
+  ggplot()+
+  geom_point(aes(x= NO3, y= ChlA, color= Watershed_Level))+
+  geom_smooth(aes(x= NO3, y= ChlA))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "NO3", y = "ChlA")
+ggsave("test_fig/NO3_vs_chla.jpg", width = 11, height = 9)
+#plot(no3_vs_k)
+
+k_no3_vs_chla <- res_chem_k_no3%>%
+  ggplot()+
+  geom_point(aes(x= k_no3, y= ChlA, color= Watershed_Level))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "K/NO3", y = "ChlA")
+plot(k_no3_vs_chla)
+
+ggsave("test_fig/k_no3_vs_chla.jpg", width = 11, height = 9)
+```
+
+## Inflow: Outflow ratio
+
+```{r}
+
+
+
+joer_cbrr_ratios <- filter(Reservoir_Chemistry, Site_Code %in% c("JOEI",
+                                                                "JOER",
+                                                                "CBRI",
+                                                                "CBRR",
+                                                                "CHD"))%>%
+  select(Date,
+         Site_Code,
+         ChlA)%>%
+  drop_na()%>%
+  distinct()%>%
+  pivot_wider(names_from = Site_Code, values_from = ChlA)%>%
+  mutate(jw_ratio = CBRI - JOEI,
+         chambers_ratio = CHD - CBRI, 
+         Year = year(Date))
+  
+  
+res_ratio_plot <- joer_cbrr_ratios%>%
+  ggplot()+
+  geom_point(aes(x=Date, y = jw_ratio, size = JOER*2, alpha = .5), color ="#56B4E9")+
+  geom_line(aes(x=Date, y = jw_ratio), color ="#56B4E9")+
+  geom_point(aes(x=Date, y = chambers_ratio, size = CBRR*2, alpha = .5), color ="#E69F00" )+
+   geom_line(aes(x=Date, y = chambers_ratio), color ="#E69F00")+
+  theme_bw(base_size=15) +
+  theme(legend.position = "none") +
+  labs( x = "Date", y = "Outflow ChlA - Inflow ChlA")+
+  facet_wrap( ~Year, scales = "free_x" )
+ggsave("output/Res_Ratio.jpg",width = 11, height = 9)
+plot(res_ratio_plot)
 ```
 
 ## Conclusions!
