@@ -66,6 +66,8 @@ watershed_sbs <- read_csv('data/sbs_watershed.csv') %>%
 
 Sites <- read.csv('data/CPF_Sites.csv')
 
+dist_from_pbd <- read.csv('data/Distance_from_PBD.csv')
+
 ```
 
 ## Cleaning data
@@ -97,6 +99,7 @@ Reservoir_Chemistry <- read_csv('data/CPF_Res_Chem_092122.csv')%>%
    left_join(select(buffer_sbs,c(Watershed,Buffer_Level)),by="Watershed") %>%
   left_join(select(watershed_sbs,c(Site_Code,Watershed_Level)),by="Site_Code") %>%
   left_join(select(Sites,c(Site_Code,Lat,Long)),by="Site_Code") %>%
+  left_join(select(dist_from_pbd,c(Site_Code,distance_upstream_km)),by="Site_Code") %>%
   mutate(Season=ifelse(Date <= "2022-06-09", "SPRING",
                 ifelse(Date <= "2022-09-24", "SUMMER", "FALL"))) %>%
   mutate(Status = ifelse(Site_Code %in% c('LNGR','LNGO','JOEI'),"Unburned",
@@ -190,7 +193,12 @@ write.csv(Reservoir_Chemistry,
 write.csv(filter(Reservoir_Chemistry, Location == "Mainstem"),
           "data/Prepped_Mainstem_Chemistry.csv")
 
+Reservoir_Chemistry_Concise <- Reservoir_Chemistry%>%
+  select(Site, Site_Code, Date,Lat,Long,Watershed,Watershed_Level, Status,Location, Turbidity,TSS,ChlA,DOC,DTN,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4)
 
+
+write.csv(Reservoir_Chemistry_Concise, 
+          "data/CPF_Reservoir_chemistry_up_to_083122.csv")
 #Res_Chem_longer <- Reservoir_Chemistry%>%
  # pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3), names_to = "Variable", values_to = "Measurement")
 
