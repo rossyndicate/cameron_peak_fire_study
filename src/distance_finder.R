@@ -37,4 +37,7 @@ paths <- get_pathlength(flowlines) %>%
   right_join(xy, by='comid') %>%
   select(Site_Code,comid,distance_upstream_km=pathlength)
 
+write.csv(paths, "data/Distance_from_PBD.csv")
+
+
 mapview(flowlines) + mapview(xy)
