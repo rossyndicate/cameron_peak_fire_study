@@ -1,8 +1,10 @@
 ---
 title: "DO Analysis"
 author: "Sam Struthers"
-format: html
-  self-contained: true
+format:
+  html:
+  embed-resources: true
+    self-contained-math: true
 code-fold: true
 warning: false
 editor: visual
@@ -37,43 +39,53 @@ library(dplyr)
 ## Pulling in Cleaned Data
 
 ```{r}
-Cleaned_DO_Sensors <- read.csv("data/Clean_CPF_DO_101222.csv")%>%
-  mutate(DateTime = as.POSIXct(DateTime, tz = "", format = "%m/%d/%Y %H:%M"))
+Cleaned_DO_Sensors <- read.csv("data/Clean_CPF_DO_111422.csv")%>%
+  mutate(DateTime = as.POSIXct(DateTime, tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"))
 
 
-PBR_DO_10_10_22 <- read.csv("data/PBR_DO_050122_101022.csv")%>%
+
+PBR_DO <- read.csv("data/PBR_DO_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "", format= "%m/%d/%Y %H:%M"),
-    DO_mg_L = Value,
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DO_mgL = Value,
     Quality = Data.Quality, 
     Date = as.Date(DateTime)
   )%>%
-  filter(between(DO_mg_L,5,12))
+  filter(between(DO_mgL,7,12))
 
-PBR_TEMP_10_10_22 <- read.csv("data/PBR_TEMP_50122_101022.csv")%>%
+PBR_TEMP <- read.csv("data/PBR_TEMP_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "", format= "%Y-%m-%d %H:%M:%S"),
-    Temp_C = Value,
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    temp_c = Value,
     Quality = Data.Quality, 
     Date = as.Date(DateTime)
   )
 
 
-Manners_Bridge_DO_10_10_22 <- read.csv("data/Manners_Bridge_DO_50122_101022.csv")%>%
+
+Manners_Bridge_DO <- read.csv("data/Manners_Bridge_DO_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "", format= "%Y-%m-%d %H:%M:%S"),
-    DO_mg_L = Value,
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DO_mgL = Value,
     Quality = Data.Quality, 
     Date = as.Date(DateTime))%>%
-   filter(between(DO_mg_L,6,13))
+   filter(between(DO_mgL,6,13))
+
+Manners_Bridge_TEMP <- read.csv("data/Manners_Bridge_TEMP_50122_110822.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    temp_c = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime))
+
 
 
 Clean_DO_Graph <- ggplot()+
   geom_smooth(data = Cleaned_DO_Sensors, aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
-geom_smooth(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
+geom_smooth(data = PBR_DO , aes( x= DateTime, y = DO_mgL ) ,color = "Black")+
   theme_bw()
 
-ggplotly(Clean_DO_Graph)
+#ggplotly(Clean_DO_Graph)
   
   
 ```
@@ -88,10 +100,15 @@ Sites <- read.csv("data/CPF_Sites.csv")
 
 Field_Values <- read.csv("data/FIELD_DO_COND_TEMP.csv")%>%
   mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
-         DateTime = as.POSIXct(paste(Date, Time), tz = "", format = "%Y-%m-%d %H:%M"),
+         DateTime = as.POSIXct(paste(Date, Time), tz = "UTC", format = "%Y-%m-%d %H:%M"), 
+        dayofyear = yday(Date),
          Type = "Handheld",
          Site_Code = Site)%>%
-  left_join(select(Sites,c(Site_Code,Lat,Long, Campaign, Type)),by="Site_Code")
+  left_join(select(Sites,c(Site_Code,Lat,Long, Campaign, Type)),by="Site_Code")%>%
+  mutate(handheld_temp_c = Temp_C, 
+         handheld_do_mgL = DO_mg_L,
+         handheld_cond_ms_cm = Cond_ms_cm,
+         site = Site_Code)
 
 
 
@@ -113,112 +130,103 @@ Handheld_graph_Mainstem_RES <- filter(Field_Values_Longer,Site!= "BMD"  & Campai
 Handheld_and_sensor <- ggplot()+
   geom_point(data= filter(Field_Values, Site!= "BMD" & Campaign == "Chambers Complex" |Campaign == "Mainstem"), aes(x=DateTime, y= DO_mg_L, colour = Site) )+
   geom_line(data = Cleaned_DO_Sensors, aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
-geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
-  theme_bw()
+geom_line(data = PBR_DO , aes( x= DateTime, y = DO_mgL ) ,color = "Black")+
+    theme_bw()
 
 
 #Handheld graph
-ggplotly(Handheld_graph_Mainstem_RES)
+#ggplotly(Handheld_graph_Mainstem_RES)
 
 #Handheld Correlated with sensors
-ggplotly(Handheld_and_sensor)
+#ggplotly(Handheld_and_sensor)
 
 ```
 
-## Longitudinal view
+## Daily Means
 
-#### Dataframe Creation
-
-Grouped monthly (bc there are fewer datapoints) and given distance variable to help with categorical graphing .
+This chunk will group the sensor data by date and take the means value. Dates will be matched with grab samples to show when grab samples were taken.
 
 ```{r}
-Field_monthly <- Field_Values%>%
-  mutate(Month = month(Date))%>%
-  group_by(Month, Site_Code)%>%
-  summarise( mean_DO = mean(DO_mg_L,na.rm = TRUE),
-             mean_Temp = mean(Temp_C,na.rm = TRUE),
-             mean_Cond = mean(Cond_ms_cm,na.rm = TRUE))%>%
-  left_join(select(Sites,c(Site_Code,Lat,Long, Campaign, Type)),by="Site_Code")%>%
-  mutate(Distance = case_when(Site_Code == 'JOEI' ~ 1,
-                              Site_Code == 'JOER' ~ 2,
-                              Site_Code == 'CBRI' ~ 3,
-                              Site_Code == 'CBRR' ~ 4,
-                              Site_Code == 'CHD' ~ 5,
-                              Site_Code == 'BRNR' ~ 6,
-                              Site_Code == 'BMD' ~ 7,
-                              Site_Code == 'JWC' ~ 8,
-                              Site_Code == 'LNGR' ~ 9,
-                              Site_Code == 'PTRR' ~ 10,
-                              Site_Code == 'LNGO' ~ 11,
-                              Site_Code == 'PTRO' ~ 12,
-                              Site_Code == 'PJW' ~ 13,
-                              Site_Code == 'SLEP' ~ 14,
-                              Site_Code == 'PBR' ~ 15,
-                              Site_Code == 'HORI' ~ 16,
-                              Site_Code == 'COMI' ~ 17,
-                              Site_Code == 'HORR' ~ 18,
-                              Site_Code == 'COMR' ~ 19,
-                              Site_Code == 'HORO' ~ 20,
-                              Site_Code == 'COMO' ~ 21,
-                              Site_Code == 'BEAV' ~ 22,
-                              Site_Code == 'SFM' ~ 23,
-                              Site_Code == 'PSF' ~ 24,
-                              Site_Code == 'PNF' ~ 25,
-                              Site_Code == 'PBD' ~ 26
-                              ),
-         Distance_name = as.character(Distance),
-         Month=as.character(Month),
-         Month_Name = case_when(
-           Month == '8'~ "Aug", 
-           Month == '9'~ "Sept", 
-           Month == '10' ~ "Oct"
-         ))
-Distance_levels=c("1", "2", "3","4", "5", "6","7", "8", "9","10", "11", "12","13","14", "15", "16","17", "18", "19","20", "21", "22","23", "24", "25","26")
- 
+
+daily_means_sensor <- Cleaned_DO_Sensors%>%
+  mutate(dayofyear = yday(DateTime), 
+         Date = date(DateTime), 
+         site = Site_Code)%>%
+  group_by(dayofyear, site,Date)%>%
+  summarise(mean_DO_mgL = mean(DO_mgL), 
+            mean_temp_c = mean(Temp_C))%>%
+  ungroup()
+
+daily_means_pbr_do <- PBR_DO%>%
+  mutate(dayofyear = yday(DateTime), 
+         Date = date(DateTime))%>%
+  group_by(dayofyear,Date)%>%
+  summarise(mean_DO_mgL = mean(DO_mgL))%>%
+  ungroup()%>%
+  mutate(site = "PBR")
+
+daily_means_pbr_temp <- PBR_TEMP%>%
+  mutate(dayofyear = yday(DateTime), 
+         Date = date(DateTime))%>%
+  group_by(dayofyear,Date)%>%
+  summarise(mean_temp_c = mean(temp_c))%>%
+  ungroup()%>%
+  mutate(site = "PBR")
+
+daily_means_pbr<- daily_means_pbr_do%>%
+  left_join(select(daily_means_pbr_temp, c(mean_temp_c,dayofyear)), by = "dayofyear")
 
 
-
+daily_means <- rbind(daily_means_pbr, daily_means_sensor)
 
 
 
 
 ```
 
-### Graphing
+## Combining with samples
+
+Pulling in sample IDs for sites where we have DO sensors, matching it to daily means.
 
 ```{r}
 
+site_labels <- c("CBRI", "JOEI", "CHD", "JWC", "PJW", "PNF", "PBD", "SFM", "PSF" )
 
-Handheld_Monthly_Temp <- filter(Field_monthly, Campaign != "South Fork" & Campaign != "Longdraw"& Site_Code != "BMD" & Site_Code != "BRNR")%>%
+cam_pk_chem <- read.csv("data/cam_pk_master_110322.csv")%>%
+  filter(Era == "FCW" )%>%
+  filter(SiteLabel %in% site_labels)%>%
+  mutate( grab_date  = as.Date(Date, format = "%d-%b-%y"), 
+          Year = year(grab_date), 
+          dayofyear = yday(grab_date))%>%
+  filter(Year >=2022)%>%
+  filter(SampleType %in% c("NORM"))%>%
+  select(grab_date, SiteLabel, Era, EraSamp, dayofyear, SampleType)%>%
+mutate(site=SiteLabel)
+
+
+
+sample_by_day <- cam_pk_chem%>%
+  select(site, dayofyear, SampleType, EraSamp)
+
+
+
+daily_means_w_samples <- daily_means%>%
+  #left_join( select(cam_pk_chem, c(Site, SiteLabel, dayofyear, grab_date,SampleType, Era )), by = "dayofyear")%>%
+  left_join( select(sample_by_day, c(site, dayofyear, EraSamp )), by = c("site", "dayofyear") )%>%
+  left_join( select(Field_Values, c(site,dayofyear,handheld_temp_c, handheld_do_mgL, handheld_cond_ms_cm )), by = c("site", "dayofyear") )
+
+
+daily_means_w_samples_graph <- daily_means_w_samples%>%
   ggplot()+
-  geom_point(aes(x= factor(Distance_name,levels = Distance_levels ), y = mean_Temp, shape = Type, color = Month_Name), size = 5, show.legend = FALSE)+
-  geom_line(aes(x= factor(Distance_name,levels = Distance_levels ), y = mean_Temp, group = Month, color = Month_Name), size = 1, show.legend = FALSE)+
-  geom_point(aes(x= factor(Distance_name,levels = Distance_levels ), y = mean_Temp, shape = Type, color = Month_Name), size = 8, show.legend = FALSE)+
- theme_bw(base_size=24) +
-   labs(shape = "", color="") +
-  theme(legend.position="none")+
-   scale_x_discrete(labels=c("1" = "JOEI","2" = "JOER", "3" = "CBRI","4" = "CBRR", "5" = "CHD","8" = "JWC", "13" = "PJW", "14" = "SLEP","15" = "PBR", "24" = "PSF","25" = "PNF","26" = "PBD")) +
-   #theme(axis.text.x = element_blank()) +
- xlab("Longitudinal Profile") +
-   ylab("Temperature (C)")
-  
-#plot(Handheld_Monthly_Temp)
+  geom_line(aes(x= Date, y = mean_DO_mgL,group = site, color = site))+
+  geom_point(aes(x= Date, y = handheld_do_mgL , color = site))+
+  theme_bw()
 
-Handheld_Monthly <- filter(Field_monthly, Campaign != "South Fork" & Campaign != "Longdraw"& Site_Code != "BMD" & Site_Code != "BRNR")%>%
-  ggplot()+
-  geom_point(aes(x= factor(Distance_name,levels = Distance_levels ), y = mean_DO, shape = Type, color = Month_Name), size = 5)+
-  geom_line(aes(x= factor(Distance_name,levels = Distance_levels ), y = mean_DO, group = Month, color = Month_Name), size = 1)+
-  geom_point(aes(x= factor(Distance_name,levels = Distance_levels ), y = mean_DO, shape = Type, color = Month_Name), size = 5)+
- theme_bw(base_size=24) +
-   labs(shape = "", color="") +
-   theme(axis.text.x = element_blank()) +
- xlab("") +
-   ylab("DO (mg/L)")
+ggplotly(daily_means_w_samples_graph)
 
-#plot(Handheld_Monthly)
 
-ggarrange(Handheld_Monthly, Handheld_Monthly_Temp, ncol = 1, nrow = 2)
 
-ggsave('output/Handheld_DO_TEMP.jpg', width=13.5, height=10)
+# write csv
 
+write_csv(daily_means_w_samples, "data/mean_daily_do_temp_FCW.csv")
 ```
