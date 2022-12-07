@@ -151,16 +151,16 @@ nutrient_boxplot_w_title_graph = function(nutrient){
   facet_wrap(~Year)
 }
 
-#boxplot function size 24
+#boxplot function size 28
 
-nutrient_boxplot_graph24 = function(nutrient){
+nutrient_boxplot_graph28 = function(nutrient){
   res_only_data%>%
     filter(label == nutrient)%>%
   ggplot() +
   geom_boxplot(aes(x=reorder(site_code,order,max),y=value, middle=mean(value), fill=Watershed_Level)) +
   scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
                         guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
-  theme_bw(base_size=24)+
+  theme_bw(base_size=28)+
   theme(legend.position = "none",
   strip.background = element_blank(),
   strip.text.x = element_blank())+
@@ -168,15 +168,15 @@ nutrient_boxplot_graph24 = function(nutrient){
   facet_wrap(~Year)
 }
 
-#Boxplot title base size 24
-nutrient_boxplot_w_title_graph24 = function(nutrient){
+#Boxplot title base size 28
+nutrient_boxplot_w_title_graph28 = function(nutrient){
   res_only_data%>%
     filter(label == nutrient)%>%
   ggplot() +
   geom_boxplot(aes(x=reorder(site_code,order,max),y=value, middle=mean(value), fill=Watershed_Level)) +
   scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
                         guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
-  theme_bw(base_size= 24)+
+  theme_bw(base_size= 28)+
   theme(legend.position = "none")+
   labs(x = "", y = nutrient)+
   facet_wrap(~Year)
@@ -235,23 +235,23 @@ Mimics graphs from 2021 report. Faceted for 2022 data
 
 ```{r}
 
-no3_boxplot <-nutrient_boxplot_graph24( 'NO3 (mg/L)')
-po4_boxplot <-nutrient_boxplot_graph24( 'PO4 (mg/L)')
-so4_boxplot <-nutrient_boxplot_graph24( 'SO4 (mg/L)')
-chla_boxplot <-nutrient_boxplot_graph24( 'Chl-a (mg/L)')
-pH_boxplot <-nutrient_boxplot_graph24( 'pH')
-tss_boxplot <-nutrient_boxplot_graph24( 'TSS')
-na_boxplot <-nutrient_boxplot_graph24( 'Na (mg/L)')
-nh4_boxplot <-nutrient_boxplot_graph24( 'NH4 (mg/L)')
-k_boxplot <-nutrient_boxplot_graph24( 'K (mg/L)')
-mg_boxplot <-nutrient_boxplot_graph24( 'Mg (mg/L)')
-ca_boxplot <-nutrient_boxplot_graph24( 'Ca (mg/L)')
-f_boxplot <-nutrient_boxplot_graph24( 'F (mg/L)')
-cl_boxplot <-nutrient_boxplot_graph24( 'Cl (mg/L)')
-sc_boxplot <- nutrient_boxplot_graph24('SC (uS/cm)')
+no3_boxplot <-nutrient_boxplot_graph28( 'NO3 (mg/L)')
+po4_boxplot <-nutrient_boxplot_graph28( 'PO4 (mg/L)')
+so4_boxplot <-nutrient_boxplot_graph28( 'SO4 (mg/L)')
+chla_boxplot <-nutrient_boxplot_graph28( 'Chl-a (mg/L)')
+pH_boxplot <-nutrient_boxplot_graph28( 'pH')
+tss_boxplot <-nutrient_boxplot_graph28( 'TSS')
+na_boxplot <-nutrient_boxplot_graph28( 'Na (mg/L)')
+nh4_boxplot <-nutrient_boxplot_graph28( 'NH4 (mg/L)')
+k_boxplot <-nutrient_boxplot_graph28( 'K (mg/L)')
+mg_boxplot <-nutrient_boxplot_graph28( 'Mg (mg/L)')
+ca_boxplot <-nutrient_boxplot_graph28( 'Ca (mg/L)')
+f_boxplot <-nutrient_boxplot_graph28( 'F (mg/L)')
+cl_boxplot <-nutrient_boxplot_graph28( 'Cl (mg/L)')
+sc_boxplot <- nutrient_boxplot_graph28('SC (uS/cm)')
 
-no3_boxplot_title <- nutrient_boxplot_w_title_graph24('NO3 (mg/L)')
-sc_boxplot_title <- nutrient_boxplot_w_title_graph24('SC (uS/cm)')
+no3_boxplot_title <- nutrient_boxplot_w_title_graph28('NO3 (mg/L)')
+sc_boxplot_title <- nutrient_boxplot_w_title_graph28('SC (uS/cm)')
 
 
 #boxplot fig 1
@@ -277,8 +277,7 @@ ggsave('output/nutrient_boxplot_ONEROW_SC_NO3_SO4_Mg_F_PO4_K_Na_Ca_Cl.jpg', widt
 
 ```{r}
 
-all_sites_data_2022 <- Reservoir_Chemistry%>%
-filter(Year == "2022")%>%
+all_sites_data <- Reservoir_Chemistry%>%
 filter(site_code %in% Mainstem_res_set)%>%
   pivot_longer(cols = c(ChlA, Turbidity, TSS, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3),names_to = "param", values_to = "value")%>%
   mutate(label = case_when(param == "ChlA" ~ 'Chl-a (mg/L)',
@@ -298,46 +297,12 @@ filter(site_code %in% Mainstem_res_set)%>%
                            param == 'PO4'~ 'PO4 (mg/L)',
                            param == 'SO4'~ 'SO4 (mg/L)',
                            param == param ~ "NA"))
+all_sites_data_2022 <- all_sites_data%>%
+  filter(Year == "2022")
 
 
 
 
-#timeline function
-
-nutrient_timeline_all_sites_2022 = function(nutrient){
-  
-all_sites_data_2022%>%
-    filter(label == nutrient)%>%
-    ggplot(.) +
-  geom_point(aes(x=Date,y=value, color=Watershed_Level), size=3) +
-  geom_path(aes(x=Date, y=value, group=site_code, color=Watershed_Level, label=Watershed), size=1) +
-  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
-  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
-  labs(x = "", y = nutrient) +
-  theme_bw(base_size=15) +
-  theme(legend.position = "none",
-  strip.background = element_blank(),
-  strip.text.x = element_blank())
-
-
-}
-#timeline with title function
-
-nutrient_timeline_all_sites_2022_w_title = function(nutrient){
-  
-all_sites_data_2022%>%
-    filter(label == nutrient)%>%
-    ggplot(.) +
-  geom_point(aes(x=Date,y=value, color=Watershed_Level), size=3) +
-  geom_path(aes(x=Date, y=value, group=site_code, color=Watershed_Level, label=Watershed), size=1) +
-  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
-  #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
-  labs(x = "", y = nutrient) +
-  theme_bw(base_size=15) +
-  theme(legend.position = "none")
-
-
-}
 
 
 #boxplot function
@@ -393,6 +358,70 @@ ggarrange(no3_2022_boxplot_title,po4_2022_boxplot,so4_2022_boxplot,k_2022_boxplo
 ggsave('output/nutrient_boxplot_2022_ONEROW_SC_NO3_SO4_Mg_F_PO4_NH4_K_Na_Ca_Cl.jpg', width = 30, height = 36)
 
 
+```
+
+## 2021 Boxplots all sites
+
+```{r}
+all_sites_data_2021 <- all_sites_data%>%
+  filter(Year == "2021")
+
+
+#boxplot function
+
+nutrient_boxplot_all_sites_2021 = function(nutrient){
+  all_sites_data_2021%>%
+    filter(label == nutrient)%>%
+  ggplot() +
+  geom_boxplot(aes(x=reorder(site_code,order,max),y=value, middle=mean(value), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=24)+
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  labs(x = "", y = nutrient)
+}
+
+#boxplot with title function
+
+nutrient_boxplot_all_sites_2021_w_title_graph = function(nutrient){
+  all_sites_data_2021%>%
+    filter(label == nutrient)%>%
+  ggplot() +
+  geom_boxplot(aes(x=reorder(site_code,order,max),y=value, middle=mean(value), fill=Watershed_Level)) +
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=24)+
+    ggtitle("2021 Data")+
+  theme(legend.position = "none",
+        plot.title = element_text(family = '', face = 'bold', colour = 'black', size = 30, hjust = .5, vjust = .5))+
+  labs(x = "", y = nutrient)
+  
+}
+
+#Graphs
+
+no3_2021_boxplot_title <- nutrient_boxplot_all_sites_2021_w_title_graph('NO3 (mg/L)')
+po4_2021_boxplot <- nutrient_boxplot_all_sites_2021('PO4 (mg/L)')
+so4_2021_boxplot <- nutrient_boxplot_all_sites_2021('SO4 (mg/L)')
+k_2021_boxplot <- nutrient_boxplot_all_sites_2021('K (mg/L)')
+na_2021_boxplot<- nutrient_boxplot_all_sites_2021( 'Na (mg/L)')
+nh4_2021_boxplot <-nutrient_boxplot_all_sites_2021( 'NH4 (mg/L)')
+k_2021_boxplot <-nutrient_boxplot_all_sites_2021( 'K (mg/L)')
+mg_2021_boxplot <-nutrient_boxplot_all_sites_2021( 'Mg (mg/L)')
+ca_2021_boxplot <-nutrient_boxplot_all_sites_2021( 'Ca (mg/L)')
+f_2021_boxplot <-nutrient_boxplot_all_sites_2021( 'F (mg/L)')
+cl_2021_boxplot <-nutrient_boxplot_all_sites_2021( 'Cl (mg/L)')
+sc_2021_boxplot <- nutrient_boxplot_all_sites_2021('SC (uS/cm)')
+
+#plot to test functions
+
+plot(no3_2021_boxplot_title)
+
+#arrange
+ggarrange(no3_2021_boxplot_title,po4_2021_boxplot,so4_2021_boxplot,k_2021_boxplot,nh4_2021_boxplot,na_2021_boxplot,sc_2021_boxplot,mg_2021_boxplot,ca_2021_boxplot,f_2021_boxplot,cl_2021_boxplot, ncol=1, nrow=11)
+ggsave('output/nutrient_boxplot_2021_ONEROW_SC_NO3_SO4_Mg_F_PO4_NH4_K_Na_Ca_Cl.jpg', width = 30, height = 36)
 ```
 
 ### 2022 NO3 PULSE
