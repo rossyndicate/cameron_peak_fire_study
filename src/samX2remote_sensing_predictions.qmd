@@ -114,7 +114,7 @@ plot(Eutrophic_graph)
 plot(status_time_graph)
 ```
 
-## Michael's Limnosat pull 
+## Michael's Limnosat pull
 
 ```{r}
 

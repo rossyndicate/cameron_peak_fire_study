@@ -65,9 +65,19 @@ hist(CO_data$dwl)
 #%>%
  # mutate(comid = as.character(comid))
 
-#our study sites
-cpf_waterbodies <- read.csv("data/nhd_comids.csv")
+#Peeking at study sites
 
+library(nhdplusTools)
+library(mapview)
+
+colorado <- get_huc8(id = '14010001')
+colorado_waterbodies <- get_waterbodies(AOI = colorado)
+mapview(colorado_waterbodies)
+
+
+#pulling in CPF sites, comids grabbed earlier
+
+cpf_waterbodies <- read.csv("data/nhd_comids.csv")
 
 #filter dataset to our lakes and add real names
 cpf_lake_data <- CO_data%>%
