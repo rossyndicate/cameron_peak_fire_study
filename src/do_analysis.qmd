@@ -39,8 +39,7 @@ library(dplyr)
 ## Pulling in Cleaned Data
 
 ```{r}
-Cleaned_DO_Sensors <- read.csv("data/Clean_CPF_DO_111422.csv")%>%
-  mutate(DateTime = as.POSIXct(DateTime, tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"))
+
 
 
 
@@ -49,9 +48,9 @@ PBR_DO <- read.csv("data/PBR_DO_50122_110822.csv")%>%
     DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
     DO_mgL = Value,
     Quality = Data.Quality, 
-    Date = as.Date(DateTime)
-  )%>%
-  filter(between(DO_mgL,7,12))
+    Date = as.Date(DateTime))%>%
+  filter(between(DO_mgL,7,12))%>%
+  mutate(Site_Code = "PBR")
 
 PBR_TEMP <- read.csv("data/PBR_TEMP_50122_110822.csv")%>%
   transmute(
@@ -69,7 +68,8 @@ Manners_Bridge_DO <- read.csv("data/Manners_Bridge_DO_50122_110822.csv")%>%
     DO_mgL = Value,
     Quality = Data.Quality, 
     Date = as.Date(DateTime))%>%
-   filter(between(DO_mgL,6,13))
+   filter(between(DO_mgL,6,13))%>%
+  mutate(Site_Code = "Manners Bridge")
 
 Manners_Bridge_TEMP <- read.csv("data/Manners_Bridge_TEMP_50122_110822.csv")%>%
   transmute(
@@ -78,7 +78,15 @@ Manners_Bridge_TEMP <- read.csv("data/Manners_Bridge_TEMP_50122_110822.csv")%>%
     Quality = Data.Quality, 
     Date = as.Date(DateTime))
 
+Cleaned_DO_Sensors <- read.csv("data/Clean_CPF_DO_111422.csv")%>%
+  mutate(DateTime = as.POSIXct(DateTime, tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"))
 
+# all sites, do, dt and site code only
+concise_do <- Cleaned_DO_Sensors%>%
+  select(DO_mgL, DateTime, Site_Code)%>%
+ rbind(select(PBR_DO,c(DO_mgL, DateTime, Site_Code)))%>%
+  rbind(select(Manners_Bridge_DO,c(DO_mgL, DateTime, Site_Code)))
+                                                                                   
 
 Clean_DO_Graph <- ggplot()+
   geom_smooth(data = Cleaned_DO_Sensors, aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
@@ -229,4 +237,38 @@ ggplotly(daily_means_w_samples_graph)
 # write csv
 
 write_csv(daily_means_w_samples, "data/mean_daily_do_temp_FCW.csv")
+```
+
+# JW and Chambers release water graph
+
+Attempt to show how a Joe Wright release will affect DO in the Mainstem
+
+```{r}
+
+
+
+do_release_dataset <- filter(concise_do,  Site_Code  %in% c("JWC", "CBRI","JOEI", "CHD", "PBR"))%>%
+  filter(DateTime <= '2022-09-25'&DateTime >= '2022-09-10')
+
+
+#graph 
+
+do_release_graph <- do_release_dataset%>%
+  ggplot()+
+  geom_line(aes(x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code ), size =1)+
+  scale_color_manual(name = "Site", labels= c(
+                                               "JOEI", 
+                                               "CBRI",
+                                               "CHD",
+                                               "JWC",
+                                               "PBR"), values = c("JOEI" = '#0077BB', "CBRI" = '#009988',  "CHD"= '#EE7733', "JWC" = '#CC3311', "PBR" = "#BBBBBB" ))+
+  theme_bw(base_size = 24)+
+   theme(legend.justification = c(.95,0.05) , legend.position = c(.95,0.05))+
+  #labs( color="Site") +
+   xlab("Date") +
+   ylab("Dissolved Oxygen (mg/L)")
+
+plot(do_release_graph)
+
+ggsave("output/do_joer_chambers_release_september.jpg", width = 14, height = 8)
 ```
