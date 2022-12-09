@@ -44,6 +44,11 @@ reservoir_chemistry <- read.csv("data/prepped_reservoir_chemistry.csv")%>%
   mutate(Date = as.Date(Date),
          Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow", "Mainstem")))
 
+colorsBS <- c("Barnes Meadow Reservoir" = "#D55E00", "Chambers Lake" = "#E69F00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
+
+colorsBS_site_code <- c("BRNR" = "#D55E00", "CBRR" = "#F0E442", "JOER" = "#56B4E9", "LNGR" = "#0072B2", "PTRR" ="#E69F00" )
+
+colorsBS_in_order <-c("#0072B2","#56B4E9","#F0E442","#E69F00","#D55E00")
 ```
 
 # Chl-A Plots
@@ -393,7 +398,7 @@ chla_timeline <- main_reservoir_chla %>%
   geom_abline(aes(slope=0, intercept = 8), color='black', linetype="dashed") +
 
   labs(x = "Date", y = " Chlorophyll a (μg/L)") +
-  theme_bw(base_size=15) +
+  theme_bw(base_size=24) +
   theme(legend.position = "none")+
   coord_cartesian(ylim=c(0,12))+
   facet_wrap(~Year, scales = "free_x")
@@ -405,14 +410,19 @@ plot(chla_timeline)
 chla_boxplot <- main_reservoir_chla %>%
 ggplot() + 
 geom_boxplot(aes(x=reorder(site_code,order,max),y=ChlA, middle=mean(ChlA), fill=Watershed_Level))+
-scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+
+   geom_dotplot(aes(x=reorder(site_code,order,max),y=ChlA, middle=mean(ChlA), fill = Watershed_Level), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .5, dotsize = 1, alpha = .7)+
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
                         guide="colourbar", midpoint=0.225, limits=c(0,0.45576),)+
-   geom_dotplot(aes(x=reorder(site_code,order,max),y=ChlA, middle=mean(ChlA)), fill = "black", color = "black", stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .3, dotsize = .5)+
   scale_color_grey(start = 0.4, end = 0)+
   geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
   geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
-  theme_bw(base_size=15) +
-  theme(legend.position = "none") +
+  theme_bw(base_size=24) +
+  theme(legend.position = "none",
+        axis.text.x = element_text( color  = colorsBS_in_order),
+  strip.background = element_blank(),
+  strip.text.x = element_blank()) +
+
   labs( x = "Site", y = "Chlorophyll a (μg/L)")+
   coord_cartesian(ylim=c(0,12))+
   facet_wrap(~Year, scales = "free_x")
