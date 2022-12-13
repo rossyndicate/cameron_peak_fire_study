@@ -65,6 +65,16 @@ cpf_waterbodies <- filter(clp_waterbodies, gnis_name %in% c("Chambers Lake", "Pe
 
 clp_flowlines <- get_nhdplus(AOI = clp, 
                              realization='flowline')
+
+
+bigT <- get_huc8(id = '10190006')
+UpLaramie <- get_huc8(id ='10180010')
+
+bigT_flowlines <- get_nhdplus(AOI = bigT, realization = 'flowline')
+
+UpLaramie_flowlines <- get_nhdplus(AOI = UpLaramie, realization = 'flowline')
+
+
 #Map boundaries 
 
 
@@ -75,6 +85,13 @@ sf_res_bound <- st_read("data/cpf_sbs/sf_res_bound.kml")
 
 
 st_write(CPF_sites, "data/cpf_sites.shp")
+
+st_write(cpf_waterbodies, "data/cpf_waterbodies.shp")
+st_write(clp_flowlines, "data/clp_flowlines.shp")
+st_write(clp_waterbodies, "data/clp_waterbodies.shp")
+st_write(bigT_flowlines, "data/bigT_flowlines.shp")
+st_write(UpLaramie_flowlines, "data/upLaramie_flowlines.shp")
+
 ```
 
 # Overview Map
