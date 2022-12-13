@@ -89,9 +89,18 @@ days_meso_eu <- reservoir_chemistry%>%
          perc_meso_eu = ((days_eu+days_meso)/n)*100)
 
 
+chla_per_year <-reservoir_chemistry%>%
+  select(ChlA, Year, site_code, Date, watershed)%>%
+  na.omit()%>%
+  group_by(Year)%>%
+  summarise(count_year = n())
 
 
-
+chla_per_site_year <-reservoir_chemistry%>%
+  select(ChlA, Year, site_code, Date)%>%
+  na.omit()%>%
+  group_by(Year)%>%
+  mutate(sites = length(unique(site_code)))
 ```
 
 ## Longitudinal Chl-A and NO3
