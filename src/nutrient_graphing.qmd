@@ -23,6 +23,7 @@ library(sf)
 library(plotly)
 library(geomtextpath)
 library(dplyr)
+library(ggbeeswarm)
 ## This is where i will read in data
 Mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 Mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
@@ -48,7 +49,7 @@ cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2"
 
 ```
 
-## Functions
+## Functions 
 
 ```{r}
 
@@ -119,6 +120,11 @@ res_only_data%>%
 }
 
 
+#boxplot and beeswarm function 
+
+
+
+
 #boxplot function
 
 nutrient_boxplot_graph = function(nutrient){
@@ -181,6 +187,83 @@ nutrient_boxplot_w_title_graph28 = function(nutrient){
   labs(x = "", y = nutrient)+
   facet_wrap(~Year)
 }
+
+
+nutrient_boxplot_swarm_graph = function(nutrient){
+  res_only_data%>%
+    filter(label == nutrient)%>%
+  ggplot() +
+  geom_boxplot(aes(x=reorder(site_code,order,max),y=value, middle=mean(value), fill=Watershed_Level)) +
+    geom_quasirandom(aes(x=reorder(site_code,order,max),y=value, fill = Watershed_Level),colour = "black", cex = 2.5, alpha = .75)+
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=28)+
+  theme(legend.position = "none",
+  strip.background = element_blank(),
+  strip.text.x = element_blank())+
+  labs(x = "", y = nutrient)+
+  facet_wrap(~Year)
+}
+
+nutrient_boxplot_swarm_graph_title = function(nutrient){
+  res_only_data%>%
+    filter(label == nutrient)%>%
+  ggplot() +
+  geom_boxplot(aes(x=reorder(site_code,order,max),y=value, middle=mean(value), fill=Watershed_Level)) +
+     geom_quasirandom(aes(x=reorder(site_code,order,max),y=value),color = "black", cex = 2.5, alpha = .75)+
+  scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+    scale_color_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
+                        guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=28)+
+  theme(legend.position = "none")+
+  labs(x = "", y = nutrient)+
+  facet_wrap(~Year)
+}
+
+```
+
+## Test Section
+
+```{r}
+
+no3_boxplot <-nutrient_boxplot_swarm_graph( 'NO3 (mg/L)')
+
+
+plot(no3_boxplot)
+po4_boxplot <-nutrient_boxplot_swarm_graph( 'PO4 (mg/L)')
+so4_boxplot <-nutrient_boxplot_swarm_graph( 'SO4 (mg/L)')
+chla_boxplot <-nutrient_boxplot_swarm_graph( 'Chl-a (mg/L)')
+pH_boxplot <-nutrient_boxplot_swarm_graph( 'pH')
+tss_boxplot <-nutrient_boxplot_swarm_graph( 'TSS')
+na_boxplot <-nutrient_boxplot_swarm_graph( 'Na (mg/L)')
+nh4_boxplot <-nutrient_boxplot_swarm_graph( 'NH4 (mg/L)')
+k_boxplot <-nutrient_boxplot_swarm_graph( 'K (mg/L)')
+mg_boxplot <-nutrient_boxplot_swarm_graph( 'Mg (mg/L)')
+ca_boxplot <-nutrient_boxplot_swarm_graph( 'Ca (mg/L)')
+f_boxplot <-nutrient_boxplot_swarm_graph( 'F (mg/L)')
+cl_boxplot <-nutrient_boxplot_swarm_graph( 'Cl (mg/L)')
+sc_boxplot <- nutrient_boxplot_swarm_graph('SC (uS/cm)')
+
+no3_boxplot_title <- nutrient_boxplot_swarm_graph_title('NO3 (mg/L)')
+sc_boxplot_title <- nutrient_boxplot_swarm_graph_title('SC (uS/cm)')
+
+
+#boxplot fig 1
+
+ ggarrange(sc_boxplot_title,no3_boxplot,po4_boxplot,so4_boxplot,k_boxplot, ncol=1, nrow=6)#, common.legend=T) 
+ ggsave('output/nutrient_boxplot_SC_NO3_PO4_SO4_K_black.jpg', width = 12.5, height = 16)
+
+ 
+#extra boxplot fig
+ggarrange(no3_boxplot_title,po4_boxplot,k_boxplot, cl_boxplot, ncol=1, nrow=4)
+ggsave('output/no3_po4_k_cl_boxplot.jpg', width = 12.5, height = 15)
+
+
+#Larger plot
+ggarrange(no3_boxplot_title,po4_boxplot,so4_boxplot,k_boxplot,na_boxplot,sc_boxplot_title,mg_boxplot,ca_boxplot,f_boxplot,cl_boxplot, ncol=1, nrow=10)
+ggsave('output/nutrient_boxplot_ONEROW_SC_NO3_SO4_Mg_F_PO4_K_Na_Ca_Cl.jpg', width = 30, height = 36)
+
 ```
 
 # Graphing
