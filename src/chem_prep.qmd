@@ -95,7 +95,7 @@ all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD"
 ```{r}
 
 
-reservoir_chemistry <- read_csv('data/ReservoirWaterChemistry_110122.csv')%>%
+reservoir_chemistry <- read_csv('data/ReservoirChemistry_120522.csv')%>%
   mutate(Date=as.Date(Date,format="%d-%b-%y"))%>%
   filter(SampleType == "NORM") %>%
   mutate (FCW_Number = as.numeric(gsub('FCW ', '', IDNo)), 
@@ -110,7 +110,7 @@ reservoir_chemistry <- read_csv('data/ReservoirWaterChemistry_110122.csv')%>%
                    ifelse(site_code %in% c('BRNR','BMD'),"Barnes Meadow Reservoir",
                    ifelse(site_code %in% c('COMR','COMO','COMI'),"Comanche Reservoir","Hourglass Reservoir"))))))))) %>%
    left_join(select(buffer_sbs,c(watershed,Buffer_Level)),by="watershed") %>%
-  left_join(select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code") %>%
+  left_join(select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code")%>%
   left_join(select(Sites,c(site_code,Lat,Long)),by="site_code") %>%
   left_join(select(dist_from_pbd,c(site_code,distance_upstream_km)),by="site_code") %>%
   mutate(season=ifelse(Date <= "2022-06-09", "SPRING",
@@ -208,11 +208,11 @@ write.csv(filter(reservoir_chemistry, Location == "Mainstem"),
           "data/prepped_mainstem_chemistry.csv")
 
 reservoir_chemistry_concise <- reservoir_chemistry%>%
-  select(Site, site_code, Date,Lat,Long,watershed,Watershed_Level, status,Location, Turbidity,TSS,ChlA,DOC,DTN,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4)
+  select(Site, site_code, Date,Lat,Long,watershed,Watershed_Level, status,Location, Turbidity,TSS,ChlA,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4)
 
 
 write.csv(reservoir_chemistry_concise, 
-          "data/CPF_reservoir_chemistry_up_to_083122.csv")
+          "data/CPF_reservoir_chemistry_up_to_110122.csv")
 #Res_Chem_longer <- reservoir_chemistry%>%
  # pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3), names_to = "Variable", values_to = "Measurement")
 

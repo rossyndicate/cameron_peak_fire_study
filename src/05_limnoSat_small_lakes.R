@@ -37,16 +37,8 @@ str(CO_data)
 
 
 CO_data <- read.csv("data/compiled_limnosat_110122.csv") %>%
-  mutate(date = as.Date(date, format = "%m/%d/%Y"))
-  #mutate(date_new= as.Date(paste(date, sep=""), "%Y%m%d")) %>%
-  #unite("LandsatID", col1:date, sep= "_", 
-  #      remove = TRUE) %>%
-  #rename(nhdplusv2_comid=permanent,
-         #mystery_ID=col6,
-         #date=date_new)  %>%
-  #mutate(year=year(date)) %>%
-  #drop_na() %>%
-  #mutate(dwl=fui.hue(Red, Green, Blue))
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+ 
 
 names(CO_data)
 str(CO_data)
@@ -69,31 +61,60 @@ hist(CO_data$dwl)
 #res_comid <- read.csv("data/res_comid.csv")%>%
  #  mutate(comid = as.character(comid))
 
-clp_watershed <- get_huc8(id ='10190007')
-
-#CO water bodies
-
-CO <- states()%>%
-  filter(NAME == "Colorado")
-
-#all Cache la Poudre waterbodies
-clp_waterbodies <- get_waterbodies(AOI = CO)
 
 #%>%
  # mutate(comid = as.character(comid))
 
-#our study sites
-cpf_waterbodies <- get_waterbodies(AOI = clp_watershed)%>%
-  filter(gnis_name %in% c("Chambers Lake", "Peterson Lake", "Joe Wright Reservoir", "Long Draw Reservoir", "Barnes Meadow Reservoir"))%>%
-mutate(comid = as.character(comid), 
-gnis_id = as.character(gnis_id))  
+#Peeking at study sites
 
-co_lakes_data <- clp_waterbodies%>%
-  filter(comid %in% CO_data$nhdplusv2_comid)
+library(nhdplusTools)
+library(mapview)
 
-cpf_lakes_data <- CO_data%>%
-#  mutate(nhdplusv2_comid = as.numeric(nhdplusv2_comid))%>%
- filter(nhdplusv2_comid %in% cpf_waterbodies$gnis_id)
+colorado <- get_huc8(id = '14010001')
+colorado_waterbodies <- get_waterbodies(AOI = colorado)
+mapview(colorado_waterbodies)
 
 
-write_csv(CO_data, "data/compiled_limnosat_110122.csv")
+#pulling in CPF sites, comids grabbed earlier
+
+cpf_waterbodies <- read.csv("data/nhd_comids.csv")
+
+#filter dataset to our lakes and add real names
+cpf_lake_data <- CO_data%>%
+ filter(nhdplusv2_comid %in% cpf_waterbodies$nhdplusv2_comid)%>%
+mutate(nhdplusv2_comid = as.integer(nhdplusv2_comid))%>%
+inner_join(., cpf_waterbodies, by= "nhdplusv2_comid")
+
+cpf_lakes_sum <- cpf_lakes_data%>%
+  group_by(nhdplusv2_comid, year)%>%
+  summarise(count = n())
+  
+cpf_lake_data <- read.csv("data/cpf_lakes_limnosat.csv")%>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+#graph dominant wavelength
+colorsBS <- c("Barnes Meadow Reservoir" = "#E69F00", "Chambers Lake" = "#F0E442", "Peterson Lake" = "#D55E00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
+
+dwl_cpf_graph <- cpf_lake_data%>%
+  ggplot()+
+  geom_point(aes(x= date, y = dwl, color = site, size = site), alpha=.7)+
+  theme_bw()+
+  scale_color_manual(name="", values = colorsBS ) +
+  scale_size_manual(values = c(2.5,2,1.5,1, .5))+
+  guides(size = "none")+
+  ylab("Dominant Wavelength")+
+  xlab("Date")
+
+plot(dwl_cpf_graph)
+
+dwl_cpf_boxplot <- filter(cpf_lake_data, year>2019) %>%
+  ggplot(aes(x=site,y=dwl, middle=mean(dwl), fill=site)) + 
+  geom_dotplot(stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = 5, dotsize = 1)+
+  theme_bw()+
+  scale_fill_manual(name="", values = colorsBS ) +
+  scale_size_manual(values = c(2.5,2,1.5,1, .5))+
+  guides(size = "none")+
+  ylab("Dominant Wavelength")+
+  xlab("Date")
+plot(dwl_cpf_boxplot)
+
+write_csv(cpf_lake_data, "data/cpf_lakes_limnosat.csv")

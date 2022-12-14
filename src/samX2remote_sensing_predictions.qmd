@@ -1,0 +1,243 @@
+---
+title: "lake remote sensing upper poudre"
+format: html
+editor: visual
+---
+
+## Setup/ Libraries
+
+```{r, setup, include=FALSE}
+
+knitr::opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study")
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(ggthemes)
+library(scales)
+library(corrplot)
+library(lubridate)
+library(sf)
+library(mapview)      # Takes time to load, not using it yet
+library(plotly)
+library(geomtextpath)
+library(dplyr)
+library(nhdplusTools)
+library(plotly)
+```
+
+## Importing data
+
+-   status_predict - Data from Sam Sillen
+
+    -   XYZ
+
+-   cpf_waterbodies = comids for our reservoirs and geometry
+
+    -   should help match up data
+
+-   Chem/chla data?
+
+    -   RMRS lab stuff
+
+geom_point(aes(x= Year, y = percent_year ))+
+
+geom_line(aes(x= Year, y = percent_year ))+
+
+```{r}
+clp_watershed <- get_huc8(id ='10190007')
+cpf_waterbodies <- get_waterbodies(AOI = clp_watershed)%>%
+  filter(gnis_name %in% c("Chambers Lake", "Peterson Lake", "Joe Wright Reservoir", "Long Draw Reservoir", "Barnes Meadow Reservoir"))%>%
+  mutate(site = gnis_name)
+
+buffer_sbs <- read_csv('data/sbs_buffer.csv') %>%
+  mutate(Buffer_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))%>%
+  rename(site = Watershed)
+
+watershed_sbs <- read_csv('data/sbs_watershed.csv') %>%
+  mutate(Watershed_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High)) %>% rename(site_code=SITE_CODE)
+ 
+
+status_predict <- read.csv("data/trophic_state_predicted.csv")%>%
+  mutate(Date = as.Date(date, format = "%Y-%m-%d"), 
+         comid =COMID)
+  filter(comid %in% cpf_waterbodies$comid)%>%
+  left_join(select(cpf_waterbodies, c(comid, site)), by = "comid")%>%
+  mutate(Year = year(Date),
+         site_code = ifelse(site =="Barnes Meadow Reservoir", "BRNR", 
+                      ifelse(site =="Chambers Lake", "CBRR",
+                      ifelse(site =="Joe Wright Reservoir", "JOER", "LNGR"))))%>%
+  left_join(select(buffer_sbs,c(site,Buffer_Level)),by="site") %>%
+  left_join(select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code")
+
+#burn severity colors
+colorsBS <- c("Barnes Meadow Reservoir" = "#D55E00", "Chambers Lake" = "#E69F00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
+
+
+#percent of year abve 2.6
+
+
+
+sat_percents <- status_predict %>%
+  group_by(site,Watershed_Level,Year,trophic_predicted) %>%
+  summarize(count=n()) %>%
+  pivot_wider(names_from=trophic_predicted,values_from=count) %>%
+  mutate(across(everything(), ~replace_na(.x, 0))) %>%
+  dplyr::mutate(fraction_meso_eu = 100*((mesotrophic+eutrophic)/(oligotrophic+mesotrophic+eutrophic)))
+
+#Percent of year >2.6  graph
+
+status_time_graph <- sat_percents%>%
+  ggplot()+
+  geom_point(aes(x= Year, y = fraction_meso_eu, color = site, size = site), alpha=.7)+
+  theme_bw()+
+  scale_color_manual(name="", values = colorsBS ) +
+  scale_size_manual(values = c(2.5,2,1.5,1))+
+  guides(size = "none")+
+  ylab("Percent (%) of Year Chlorophyll a  >2.6 μg/L")+
+  xlab("Year")
+ # legend(x= 2020, y=80, legend=c("Barnes Meadow Reservoir", "Chambers Lake", "Joe Wright Reservoir", "Long Draw Reservoir" ), 
+   #fill=c("#D55E00","#E69F00","#56B4E9", "#0072B2"), pch=16 )
+  
+ggsave("output/Matt_percent_eu.jpg", width = 11, height = 9)
+  
+Eutrophic_graph <- filter(status_predict, trophic_predicted == "eutrophic")%>%
+  ggplot()+
+  geom_point(aes(x= Year, y= trophic_predicted, color = site, size =site), alpha = .6)+
+  scale_size_manual(values = c(1,3,5,7))+
+  scale_color_manual(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+ # theme(legend.position = "none") +
+  labs( x = "Year", "Status")
+
+
+plot(Eutrophic_graph)
+plot(status_time_graph)
+```
+
+## Michael's Limnosat pull
+
+```{r}
+
+# pull in limnosat data
+# color of rivers classification
+# yellow >560
+# green 495-560
+# blue < 495
+
+
+cpf_lake_data <- read.csv("data/cpf_lakes_limnosat.csv")%>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"),
+         color_dominant = ifelse(dwl > 560, "yellow",
+                           ifelse(dwl>=495&dwl<=560,"green","blue")))
+
+#graph dominant wavelength
+colorsBS <- c("Barnes Meadow Reservoir" = "#E69F00", "Chambers Lake" = "#F0E442", "Peterson Lake" = "#D55E00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
+
+colorsdom <- c("yellow" = "#F0E442","green" = "#009E73",  "blue" = "#56B4E9")
+
+#point/facet graph
+
+dwl_cpf_graph <-cpf_lake_data%>%
+  ggplot()+
+  geom_point(aes(x= date, y = dwl, color = color_dominant), alpha=.7)+
+  geom_smooth(aes(x= date, y = dwl))+
+  theme_bw()+
+  scale_color_manual(name="", values = colorsdom ) +
+ # scale_size_manual(values = c(2.5,2,1.5,1, .5))+
+  guides(size = "none")+
+  ylab("Dominant Wavelength")+
+  xlab("Date")+
+  facet_wrap(~site)
+
+plot(dwl_cpf_graph)
+
+ggsave("output/dwl_facets_cpf_lakes.jpg", width = 11, height = 9)
+
+#dotplot 
+
+dwl_cpf_boxplot <- cpf_lake_data %>%
+  ggplot(aes(x=site,y=dwl, middle=mean(dwl), fill= color_dominant )) + 
+  geom_dotplot(stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", binwidth = 3, dotsize = 2)+
+  theme_bw()+
+  scale_fill_manual(name="", values = colorsdom ) +
+  scale_size_manual(values = c(2.5,2,1.5,1, .5))+
+  guides(size = "none")+
+  ylab("Dominant Wavelength")+
+  xlab("Date")
+
+plot(dwl_cpf_boxplot)
+
+
+ggsave("output/dwl_dotplot_cpf_lakes.jpg", width = 11, height = 9)
+```
+
+## Yearly color means
+
+```{r}
+cpf_yearly_dwl_means <- cpf_lake_data%>%
+  group_by(site, year)%>%
+  summarise(mean_dwl = mean(dwl))%>%
+  ungroup%>%
+  mutate(color_dominant = ifelse(mean_dwl > 560, "yellow",
+                           ifelse(mean_dwl>=495&mean_dwl<=560,"green","blue")))
+
+color_dom_size <- c("yellow" = .5,"green" = 2,  "blue" = 1)
+
+mean_dwl_cpf_graph <-cpf_yearly_dwl_means%>%
+  ggplot()+
+  geom_point(aes(x= year, y = mean_dwl, color = site, size = color_dominant), alpha=.7)+
+  theme_bw()+
+  scale_color_manual(name="", values = colorsBS ) +
+  scale_size_manual(values = color_dom_size)+
+ # guides(size = "none")+
+  ylab("Mean Dominant Wavelength")+
+  xlab("Year")
+
+ggplotly(mean_dwl_cpf_graph)
+
+ggsave("output/dwl_facets_cpf_lakes.jpg", width = 11, height = 9)
+
+```
+
+## Total Percent green
+
+```{r}
+#df
+dwl_green_percents <- cpf_lake_data %>%
+  group_by(site,year,color_dominant) %>%
+  summarize(count=n()) %>%
+  pivot_wider(names_from=color_dominant,values_from=count) %>%
+  mutate(across(everything(), ~replace_na(.x, 0))) %>%
+  dplyr::mutate(fraction_green = 100*((green)/(green+yellow+blue)),
+                fraction_yellow = 100*((yellow)/(green+yellow+blue)),
+                fraction_blue = 100*((blue)/(green+yellow+blue)))
+
+#percent of year timeline
+color_percent_graph <- dwl_green_percents%>%
+  ggplot()+
+  geom_point(aes(x= year, y = fraction_green, color = site, size = site), alpha=.7)+
+  theme_bw()+
+  scale_color_manual(name="", values = colorsBS ) +
+  scale_size_manual(values = c(2.5,2,1.5,1,.5))+
+  guides(size = "none")+
+  ylab("Percent (%) of Year Dominant Wavelength is Green")+
+  xlab("Year")
+
+
+ggplotly(color_percent_graph)
+
+
+#percent of year dotplot
+
+color_percent_dotplot <- dwl_green_percents %>%
+  ggplot(aes(x=site,y=fraction_green, middle=mean(fraction_green), fill= site )) + 
+  geom_dotplot(stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge",binwidth = 2, dotsize = 1)+
+  theme_bw()+
+  scale_fill_manual(name="", values = colorsBS ) +
+  #scale_size_manual(values = c(2.5,2,1.5,1, .5))+
+  #guides(size = "none")+
+  ylab("Percent (%) of Year Dominant Wavelength is Green")+
+  xlab("Site")
+
+plot(color_percent_dotplot)
+```

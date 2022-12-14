@@ -39,5 +39,8 @@ paths <- get_pathlength(flowlines) %>%
 
 write.csv(paths, "data/Distance_from_PBD.csv")
 
+res_comid <-filter(xy, Type == "Reservoir")
+write.csv(res_comid, "data/res_comid.csv")
+
 
 mapview(flowlines) + mapview(xy)
