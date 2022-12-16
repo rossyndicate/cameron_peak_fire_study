@@ -1,0 +1,162 @@
+---
+title: "nutrient vs chla"
+format: html
+editor: visual
+---
+
+# Set Up
+
+This document is to work on graphs related to nutrients from Reservoirs/ Mainstem
+
+```{r}
+
+#library(gghighlight)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(ggthemes)
+library(scales)
+library(corrplot)
+library(lubridate)
+library(sf)
+#library(mapview)       Takes time to load, not using it yet
+library(plotly)
+library(geomtextpath)
+library(dplyr)
+## This is where i will read in data
+Mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+Mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
+
+SF_Res <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO", "BEAV", "SFM")
+
+Mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
+
+
+All_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+
+reservoir_chemistry <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
+  mutate(Date = as.Date(Date),
+         Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow", "Mainstem")))%>%
+filter(Site_Code %in% Mainstem_res_set & Year >2020)%>%
+  filter(Location == "Reservoir")%>%
+  mutate(site_year = paste(Site_Code, Year, sep = " "),
+         month =month.abb[month(Date)] ,
+         day_of_year = yday(Date))
+
+reservoir_chemistry$month <- factor(reservoir_chemistry$month, levels = c("Jun","Jul","Aug","Sep","Oct"))
+
+
+cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+```
+
+## Graphing: X vs Chl-a
+
+### K
+
+```{r}
+
+k_vs_chla <- reservoir_chemistry%>%
+  ggplot()+
+  geom_point(aes(x= K, y= ChlA, color= Watershed_Level, size = month), alpha = .5)+
+  geom_smooth(aes(x= K, y= ChlA), color = "black", method = "lm", se= F)+
+  scale_size_manual(values = c(1,4,7,10,13))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+ # theme(legend.position = "none") +
+  labs( x = "K (mg/L)", y = "Chlorophyll a (μg/L)")
+
+plot(k_vs_chla)
+ggsave("test_fig/K_vs_chla.jpg", width = 11, height = 9)
+```
+
+### NO3
+
+```{r}
+
+no3_vs_chla <- reservoir_chemistry%>%
+  ggplot()+
+  geom_point(aes(x= NO3, y= ChlA, color= Watershed_Level, size = month), alpha = .5)+
+  geom_smooth(aes(x= NO3, y= ChlA), color = "black", method = "lm", se= F)+
+  scale_size_manual(values = c(1,4,7,10,13))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+ # theme(legend.position = "none") +
+  labs( x = "NO3 (mg/L)", y = "Chlorophyll a (μg/L)")
+
+plot(no3_vs_chla)
+ggsave("test_fig/NO3_vs_chla.jpg", width = 11, height = 9)
+```
+
+### PO4 (TOTAL P)
+
+```{r}
+
+po4_vs_chla <- reservoir_chemistry%>%
+  ggplot()+
+  geom_point(aes(x= PO4 , y= ChlA, color= Watershed_Level, size = month), alpha = .5)+
+  geom_smooth(aes(x= PO4, y= ChlA), color = "black", method = "lm", se= F)+
+  scale_size_manual(values = c(1,4,7,10,13))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+ # theme(legend.position = "none") +
+  labs( x = "PO4 (mg/L)", y = "Chlorophyll a (μg/L)")
+
+plot(po4_vs_chla)
+ggsave("test_fig/PO4_vs_chla.jpg", width = 11, height = 9)
+```
+
+### DOC
+
+```{r}
+doc_vs_chla <- reservoir_chemistry%>%
+  ggplot()+
+  geom_point(aes(x= DOC , y= ChlA, color= Watershed_Level, size = month), alpha = .5)+
+  geom_smooth(aes(x= DOC, y= ChlA), color = "black", method = "lm", se= F)+
+  scale_size_manual(values = c(1,4,7,10,13))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+ # theme(legend.position = "none") +
+  labs( x = "DOC (mg/L)", y = "Chlorophyll a (μg/L)")
+
+plot(doc_vs_chla)
+ggsave("test_fig/DOC_vs_chla.jpg", width = 11, height = 9)
+```
+
+### NH4
+
+```{r}
+nh4_vs_chla <- reservoir_chemistry%>%
+  ggplot()+
+  geom_point(aes(x= NH4 , y= ChlA, color= Watershed_Level, size = month), alpha = .5)+
+  geom_smooth(aes(x= NH4, y= ChlA), color = "black", method = "lm", se= F)+
+  scale_size_manual(values = c(1,4,7,10,13))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+ # theme(legend.position = "none") +
+  labs( x = "NH4 (mg/L)", y = "Chlorophyll a (μg/L)")
+
+plot(nh4_vs_chla)
+ggsave("test_fig/NH4_vs_chla.jpg", width = 11, height = 9)
+
+
+```
+
+### SO4
+
+```{r}
+
+so4_vs_chla <- reservoir_chemistry%>%
+  ggplot()+
+  geom_point(aes(x= SO4 , y= ChlA, color= Watershed_Level, size = month), alpha = .5)+
+  geom_smooth(aes(x= SO4, y= ChlA), color = "black", method = "lm", se= F)+
+  scale_size_manual(values = c(1,4,7,10,13))+
+  scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
+  theme_bw(base_size=15) +
+ # theme(legend.position = "none") +
+  labs( x = "SO4 (mg/L)", y = "Chlorophyll a (μg/L)")
+
+plot(so4_vs_chla)
+ggsave("test_fig/SO4_vs_chla.jpg", width = 11, height = 9)
+
+```

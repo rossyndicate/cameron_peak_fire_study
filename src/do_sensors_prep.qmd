@@ -52,7 +52,7 @@ Sites <- read.csv('data/CPF_Sites.csv')
 
 hrs <- 6 * 60 * 60
 
-DO_Sensors <- read.csv("data/RAW_CPF_DO.csv")%>% 
+DO_Sensors <- read.csv("data/Sensor_DO_CPF.csv")%>% 
 mutate(DateTime = as_datetime(DT) - hrs,
        Site_Code = Site, 
        Date = as_date(DateTime),
@@ -79,32 +79,39 @@ mutate(DateTime = as_datetime(DT) - hrs,
 
 
 
-PBR_DO_10_10_22 <- read.csv("data/PBR_DO_050122_101022.csv")%>%
+PBR_DO <- read.csv("data/PBR_DO_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "", format= "%m/%d/%Y %H:%M"),
-    DO_mg_L = Value,
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DO_mgL = Value,
     Quality = Data.Quality, 
     Date = as.Date(DateTime)
   )%>%
-  filter(between(DO_mg_L,5,12))
+  filter(between(DO_mgL,7,12))
 
-PBR_TEMP_10_10_22 <- read.csv("data/PBR_TEMP_50122_101022.csv")%>%
+PBR_TEMP <- read.csv("data/PBR_TEMP_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "", format= "%Y-%m-%d %H:%M:%S"),
-    Temp_C = Value,
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    temp_c = Value,
     Quality = Data.Quality, 
     Date = as.Date(DateTime)
   )
 
 
 
-Manners_Bridge_DO_10_10_22 <- read.csv("data/Manners_Bridge_DO_50122_101022.csv")%>%
+Manners_Bridge_DO <- read.csv("data/Manners_Bridge_DO_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "", format= "%Y-%m-%d %H:%M:%S"),
-    DO_mg_L = Value,
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DO_mgL = Value,
     Quality = Data.Quality, 
     Date = as.Date(DateTime))%>%
-   filter(between(DO_mg_L,6,13))
+   filter(between(DO_mgL,6,13))
+
+Manners_Bridge_TEMP <- read.csv("data/Manners_Bridge_TEMP_50122_110822.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    temp_c = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime))
 ```
 
 ## Plotting
@@ -122,21 +129,24 @@ Manner's bridge should be used for SFM, PSF, PNF, PBD
 ```{r}
 
 DO_sensors_DO <- ggplot()+
-  geom_line(data = filter(DO_Sensors, Site_Code == "JOEI" |Site_Code == "CBRI" |Site_Code == "CHD" |Site_Code == "JWC") , aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
-geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
+  geom_line(data = filter(DO_Sensors, Site_Code == "PNF" |Site_Code == "PSF" |Site_Code == "SFM"|Site_Code == "PBD") , aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
+geom_line(data = PBR_DO , aes( x= DateTime, y = DO_mgL) ,color = "Black")+
   theme_bw()
 
 
 
 DO_sensors_temp<- ggplot()+
- geom_line(data = filter(DO_Sensors, Site_Code == "JOEI" |Site_Code == "CBRI" |Site_Code == "CHD" |Site_Code == "JWC" ), aes( x= DateTime, y = Temp_C, group = Site_Code, color = Site_Code))+
-geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
+ geom_line(data = filter(DO_Sensors, Site_Code == "PNF" |Site_Code == "PSF" |Site_Code == "SFM"|Site_Code == "PBD" ), aes( x= DateTime, y = Temp_C, group = Site_Code, color = Site_Code))+
+geom_line(data = Manners_Bridge_TEMP , aes( x= DateTime, y = temp_c ) ,color = "Black")+
   theme_bw()
 
 #Plotting DO / TEMP VS PBR
 
 ggplotly(DO_sensors_DO)
 ggplotly(DO_sensors_temp)
+
+tz(DO_Sensors$DateTime)
+tz(PBR_DO$DateTime)
 ```
 
 ### Cleaning Sensor Data
@@ -168,7 +178,7 @@ for (i in 1:length(Cleaning_Dates$Site_Code)) {
 
   Clean_DO_sensors_DO <- ggplot()+
   geom_line(data = Cleaned_DO_Sensors, aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
-geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Black")+
+geom_line(data = PBR_DO , aes( x= DateTime, y = DO_mgL ) ,color = "Black")+
   theme_bw()
 
 
@@ -176,9 +186,8 @@ geom_line(data = PBR_DO_10_10_22 , aes( x= DateTime, y = DO_mg_L ) ,color = "Bla
 
 Clean_TEMP_sensors <- ggplot()+
   geom_line(data = Cleaned_DO_Sensors, aes( x= DateTime, y = Temp_C, group = Site_Code, color = Site_Code))+
-geom_line(data = PBR_TEMP_10_10_22 , aes( x= DateTime, y = Temp_C ) ,color = "Black")+
+geom_line(data = PBR_TEMP , aes( x= DateTime, y = temp_c ) ,color = "Black")+
   theme_bw()
-
 #Temp Plot
 
 ggplotly(Clean_TEMP_sensors)
@@ -205,6 +214,18 @@ Clean_concise_DO <- Cleaned_DO_Sensors%>%
     Long
   )
 
-write_csv(Clean_concise_DO,"data/Clean_CPF_DO_101222.csv")
+write_csv(Clean_concise_DO,"data/Clean_CPF_DO_111422.csv")
 
+RAW_concise_DO <- DO_Sensors%>%
+  select(
+    DateTime,
+    Site_Code,
+    DO_mgL,
+    Temp_C,
+    Campaign,
+    Lat,
+    Long
+  )
+
+write_csv(RAW_concise_DO,"data/RAW_CPF_DO_111422.csv")
 ```

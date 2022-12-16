@@ -1,0 +1,516 @@
+---
+title: "Pull Landsat Collection 2 Stacks"
+author: "B Steele"
+format: html
+jupyter: python3
+---
+
+## *Purpose*
+
+*Pull surface reflectance and surface temperature values for Landsat-visible lakes given user-provided locations. Code here is heavily borrowed from the script 'LakeExport.py' and 'GEE_reflectance_pull.py' from the [LakeReflectanceRepo](https://github.com/GlobalHydrologyLab/LakeReflectanceRepo) (Simon Topp).*
+
+*Updates in this script includes updating to Landsat Collection 2 and including the Landsat 9 mission. Additional feature adds are using the **ST_QA** band to mask less-accurate surface temperature (ST) pixels and adding a **RADSAT_QA** band filter to mask out saturated pixels.*
+
+## *Requirements*
+
+*This code requires user to also have a bash shell open to run commands. I'm using VSCode, but you could use any other shell/command line terminal. There are some lingering inline requirements at this time, we'll figure that out later, but are noted along the way.*
+
+## *Prepare!*
+
+### *Set up your virtual environment (if you haven't already).*
+
+*To do this, run the lines in the 'venv_setup.bash' in your command line interpreter. If you've already done this, the virtual environment should begin automatically if the parent Rproj file is open. If it's not this, will probably spit out error messages about 'ee' and 'pandas'. As a reality check, make sure that, in your terminal, the lines begin with '(env)', which means the virtual environment is activated. If not, restart, open the Rproj and try again. Otherwise, re-create the virtual environment by deleting the 'env' file and re-running the venv_setup.bash script.*
+
+### *Import python modules.*
+
+```{python}
+import time
+import ee
+import os
+from pandas import read_csv
+from datetime import date
+```
+
+### *Authenticate earth engine.*
+
+*To do this, go to your command line interpreter (not the terminal in RStudio because it doesn't work here for some reason) and type 'earthengine authenticate' (atm, 'ee.Authenticate()' is not working here will figure that out later), you will need to [download, install, and initialize gcloud](https://cloud.google.com/sdk/docs/install) for this to function. Additionally, you will need a [Google Earth Engine account](https://earthengine.google.com/signup/).*
+
+### *Initialize earth engine.*
+
+```{python}
+ee.Initialize()
+```
+
+## *Load in location data*
+
+*Read in lat/lon file and create an EE asset. Location file must use the column names 'Latitude' and 'Longitude', otherwise make sure you rename them before running the function.*
+
+```{python}
+#point to file - must contin Latitude, Longitude, comid, and name
+locs_file = 'upper_poudre_lakes.csv'
+locs = read_csv(locs_file)
+#rename to required cols
+locs = locs.rename(columns = {'Lat':'Latitude', 'Long':'Longitude', 'Name':'name'})
+
+#give this a short project name (for file naming conventions)
+proj = 'CPF'
+
+def csv_to_eeFeat(df):
+  features=[]
+  for i in range(df.shape[0]):
+    x,y = df.Longitude[i],df.Latitude[i]
+    latlong =[x,y]
+    loc_properties = {'system:index':str(df.comid[i]), 'name':df.name[i], 'comid':str(df.comid[i])}
+    g=ee.Geometry.Point(latlong) 
+    feature = ee.Feature(g, loc_properties)
+    features.append(feature)
+  ee_object = ee.FeatureCollection(features)
+  return ee_object
+
+locs_feature = csv_to_eeFeat(locs)  
+
+#check to make sure everything showed up.
+locs_feature.getInfo()
+```
+
+## *Load in Landsat collections*
+
+*Grab all Landsat Collection 2 image collections, apply scaling factors, and harmonize band names and definitions*
+
+First, load a few functions
+
+```{python}
+#need to create some extra bands for ls 5 and 7 so that they play nice with ls8/9
+dummyBands = ee.Image(-99).rename('Null_CS')\
+    .addBands(ee.Image(-99).rename('Null_TIR2'))\
+    .addBands(ee.Image(-99).rename('aerosol_qa'))
+def addDummy(i):
+    return i.addBands(dummyBands)
+# dummy band sr_cloud_qa for ls 8/9 to play nice with 5/7
+cloudqa = ee.Image(-99).rename('cloud_qa')
+def addCloudQA(i):
+  return i.addBands(cloudqa)
+
+# per GEE code to scale SR and ST
+def applyScaleFactors(image):
+  opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
+  thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0)
+  return image.addBands(opticalBands, None, True)\
+    .addBands(thermalBands, None, True)
+```
+
+Grab WRS tiles (these are the 'path' and 'rows' that Landsat operates on) in descending (daytime) mode for CONUS
+
+```{python}
+wrs = ee.FeatureCollection('users/sntopp/wrs2_asc_desc')\
+    .filterBounds(locs_feature) #grab only wrs overlap with dp
+wrs = wrs.filterMetadata('MODE', 'equals', 'D') #only grab the descending (daytime) path
+    
+pr = wrs.aggregate_array('PR').getInfo() #create PathRow lit that we're interested in
+```
+
+## Then load the Landsat C2 GEE Image Collections
+
+```{python}
+#grab images and apply scaling factors
+l9 = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')\
+    .map(applyScaleFactors)\
+    .map(addCloudQA)
+l8 = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')\
+    .map(applyScaleFactors)\
+    .map(addCloudQA)
+l7 = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2')\
+    .map(applyScaleFactors)\
+    .map(addDummy)
+l5 = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2')\
+    .map(applyScaleFactors)\
+    .map(addDummy)
+    
+#Standardize band names between the various collections and aggregate 
+#them into one image collection
+#current names (in order of new names)
+bn89 = ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10', 'QA_PIXEL', 'SR_QA_AEROSOL', 'QA_RADSAT', 'ST_QA']
+bn57 = ['Null_CS', 'SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7', 'ST_B6', 'QA_PIXEL', 'aerosol_qa', 'QA_RADSAT', 'ST_QA']
+#new names
+bns = ['Aerosol','Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2', 'SurfTemp','pixel_qa', 'aerosol_qa', 'radsat_qa', 'temp_qa']
+  
+# rename bands  
+ls5 = l5.select(bn57, bns)
+ls7 = l7.select(bn57, bns)
+ls8 = l8.select(bn89, bns)
+ls9 = l9.select(bn89, bns)
+
+# merge collections and then filter to those that intersect with wrs path row combos; leaving out the cloud cover filter, as that's scene-level metadata and propbably unnecessary since we'll use the bitQA to filter pixels
+ls = ee.ImageCollection(ls5.merge(ls7).merge(ls8).merge(ls9))\
+    .filterBounds(wrs)  
+    #.filter(ee.Filter.lt('CLOUD_COVER', 75))\
+    
+# do a reality check to see how many unique scenes are here.    
+ls_count = ls.aggregate_count('LANDSAT_PRODUCT_ID').getInfo()
+print(ls_count)
+```
+
+Because GEE is finicky, we now have to separate out the stack into SR stack and ST stacks.
+
+```{python}
+srbns = ['Aerosol','Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2','pixel_qa'] #removing , 'aerosol_qa', 'radsat_qa' for now, because they aren't in use and GEE is picky.
+stbns = ['Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2','SurfTemp','temp_qa']
+ls_sr = ls.select(srbns)
+ls_st = ls.select(stbns)
+```
+
+## *Load functions*
+
+#### *Location buffer*
+
+*To buffer lat/longs:*
+
+```{python}
+## Buffer the lake sites
+def dpBuff(i):
+  return i.buffer(90) #doing a 90m buffer for this project
+  
+```
+
+### ***Functions referenced in RefPull function:***
+
+#### *Bit Mask for image quality for :*
+
+```{python}
+# create a mask for the images, based on the pixel QA bits.
+def AddFmask(image):
+  #grab just the pixel_qa info
+  qa = image.select('pixel_qa')
+  # water bit is in pos 7, so move 1 7 spaces to the left and test
+  water = qa.bitwiseAnd(1 << 7) 
+  # cloud is bit 3
+  cloud = qa.bitwiseAnd(1 << 3)
+  #snow is bit 5
+  snow = qa.bitwiseAnd(1 << 5)
+  #cloud shadow is bit 4
+  cloudshadow = qa.bitwiseAnd(1 << 4)
+  #create bitmask as additional bands
+  fmask = (water.gt(0).rename(['fmask']) #FIND WATER!
+    .where(snow.gt(0), ee.Image(3)) #where there's snow give it a value of 3
+    .where(cloudshadow.gt(0), ee.Image(2)) #value of 2 for cloudshadow
+    .where(cloud.gt(0), ee.Image(4)) #value of 4 for clouds
+    .updateMask(qa.gte(0))) #mask the fmask so that it has the same footprint as the quality (BQA) band
+  return image.addBands(fmask)
+  
+```
+
+#### Bitmask for thermal band estimates:
+
+```{python}
+def AddTmask(image):
+  #grab the temp_qa band
+  tqa = image.select('temp_qa')
+  #pixels with less than 1 deg error are valid '1'
+  tmask = tqa.lte(1)
+  #update the image with a mask of only valid pixels
+  return image.updateMask(tmask)
+```
+
+#### *Bandmath for Dswe:*
+
+```{python}
+def Mndwi(image):
+  return image.normalizedDifference(['Green', 'Swir1']).rename('mndwi')
+  
+def Mbsrv(image):
+  return image.select(['Green']).add(image.select(['Red'])).rename('mbsrv')
+  
+def Mbsrn(image):
+  return image.select(['Nir']).add(image.select(['Swir1'])).rename('mbsrn')
+
+def Ndvi(image):
+  return image.normalizedDifference(['Nir', 'Red']).rename('ndvi')
+
+def Awesh(image):
+  return (image.addBands(Mbsrn(image))
+  .expression('Blue + 2.5 * Green + (-1.5) * mbsrn + (-0.25) * Swir2', {
+    'Blue': image.select(['Blue']),
+    'Green': image.select(['Green']),
+    'mbsrn': Mbsrn(image).select(['mbsrn']),
+    'Swir2': image.select(['Swir2'])
+    }))
+
+
+```
+
+#### *Dswe calc:*
+
+```{python}
+## The DSWE Function itself    
+def Dswe(i):
+  mndwi = Mndwi(i)
+  mbsrv = Mbsrv(i)
+  mbsrn = Mbsrn(i)
+  awesh = Awesh(i)
+  swir1 = i.select(['Swir1'])
+  nir = i.select(['Nir'])
+  ndvi = Ndvi(i)
+  blue = i.select(['Blue'])
+  swir2 = i.select(['Swir2'])
+  t1 = mndwi.gt(0.124)
+  t2 = mbsrv.gt(mbsrn)
+  t3 = awesh.gt(0)
+  t4 = (mndwi.gt(-0.44)
+    .And(swir1.lt(900))
+    .And(nir.lt(1500))
+    .And(ndvi.lt(0.7)))
+  t5 = (mndwi.gt(-0.5)
+    .And(blue.lt(1000))
+    .And(swir1.lt(3000))
+    .And(swir2.lt(1000))
+    .And(nir.lt(2500)))
+  t = t1.add(t2.multiply(10)).add(t3.multiply(100)).add(t4.multiply(1000)).add(t5.multiply(10000))
+  noWater = (t.eq(0)
+    .Or(t.eq(1))
+    .Or(t.eq(10))
+    .Or(t.eq(100))
+    .Or(t.eq(1000)))
+  hWater = (t.eq(1111)
+    .Or(t.eq(10111))
+    .Or(t.eq(11011))
+    .Or(t.eq(11101))
+    .Or(t.eq(11110))
+    .Or(t.eq(11111)))
+  mWater = (t.eq(111)
+    .Or(t.eq(1011))
+    .Or(t.eq(1101))
+    .Or(t.eq(1110))
+    .Or(t.eq(10011))
+    .Or(t.eq(10101))
+    .Or(t.eq(10110))
+    .Or(t.eq(11001))
+    .Or(t.eq(11010))
+    .Or(t.eq(11100)))
+  pWetland = t.eq(11000)
+  lWater = (t.eq(11)
+    .Or(t.eq(101))
+    .Or(t.eq(110))
+    .Or(t.eq(1001))
+    .Or(t.eq(1010))
+    .Or(t.eq(1100))
+    .Or(t.eq(10000))
+    .Or(t.eq(10001))
+    .Or(t.eq(10010))
+    .Or(t.eq(10100)))
+  iDswe = (noWater.multiply(0)
+    .add(hWater.multiply(1))
+    .add(mWater.multiply(2))
+    .add(pWetland.multiply(3))
+    .add(lWater.multiply(4)))
+  return iDswe.rename('dswe')
+
+```
+
+#### *Dswe hillshade correction:*
+
+```{python}
+def CalcHillShades(image, geo):
+  MergedDEM = ee.Image("users/eeProject/MERIT").clip(geo.buffer(300))
+  hillShade = ee.Terrain.hillshade(MergedDEM, 
+    ee.Number(image.get('SUN_AZIMUTH')), 
+    ee.Number(image.get('SUN_ELEVATION')))
+  hillShade = hillShade.rename(['hillShade'])
+  return hillShade
+
+```
+
+#### *Dswe hillshadow correction:*
+
+```{python}
+def CalcHillShadows(image, geo):
+  MergedDEM = ee.Image("users/eeProject/MERIT").clip(geo.buffer(3000))
+  hillShadow = ee.Terrain.hillShadow(MergedDEM, 
+    ee.Number(image.get('SUN_AZIMUTH')),
+    ee.Number(90).subtract(image.get('SUN_ELEVATION')), 
+    30)
+  hillShadow = hillShadow.rename(['hillShadow'])
+  return hillShadow
+
+```
+
+#### *Function to remove geometry:*
+
+```{python}
+## Remove geometries
+def removeGeo(i):
+  return i.setGeometry(None)
+  
+```
+
+### ***Pulling all the working functions together as RefPull:***
+
+```{python}
+## Set up the reflectance pull
+def RefPull(image):
+  # process image with fmask, and grab fmask band only
+  f = AddFmask(image).select('fmask')
+  # where the f mask is >= 2, call that 1 (otherwise 0) and rename as clouds.
+  clouds = f.gte(2).rename('clouds')
+  # add the f mask bands to clouds, then summarize the clouds to a mean value over the geometry of the lake location at a 30m resolution to determine what proportion of pixels are of poor quality
+  cScore = clouds.reduceRegion(ee.Reducer.mean(),lakes.geometry(), 30).get('clouds')
+  #apply dswe function
+  d = Dswe(image).select('dswe')
+  #calculate hillshade
+  h = CalcHillShades(image, tile.geometry()).select('hillShade')
+  #calculate hillshadow
+  hs = CalcHillShadows(image, tile.geometry()).select('hillShadow')
+  # band where dswe is 3 and there are no clouds
+  dswe3 = d.eq(3).rename('dswe3').selfMask().updateMask(clouds.eq(0)) 
+  # create a dummy band for qa later
+  dummy = (image.select(['Blue'],['dswe1'])
+      .updateMask(clouds.eq(0)).updateMask(d.eq(1)))
+  pixOut = (image.addBands(hs)
+            .addBands(image.select(['Nir'],['NirSD']))
+            .updateMask(d.eq(1))
+            .updateMask(clouds.eq(0))
+            .addBands(dswe3)
+            .addBands(dummy)
+            .addBands(clouds))
+  combinedReducer = (ee.Reducer.median().unweighted().forEachBand(pixOut.select(['Aerosol','Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2', 'pixel_qa', 'hillShadow']))
+  .combine(ee.Reducer.stdDev().unweighted().forEachBand(pixOut.select(['NirSD'])), 'sd_', False)
+  .combine(ee.Reducer.count().unweighted().forEachBand(pixOut.select(['dswe3', 'dswe1'])), 'pCount_', False)
+  .combine(ee.Reducer.mean().unweighted().forEachBand(pixOut.select(['clouds'])), 'cScore_', False))
+  # Collect median reflectance and occurance values
+  # Make a cloud score, and get the water pixel count
+  lsout = (pixOut.reduceRegions(lakes, combinedReducer, 30))
+  out = lsout.map(removeGeo)
+  return out
+  
+```
+
+### *And also for TempPull*
+
+```{python}
+def TempPull(image):
+  # process image with tmask to mask out nonvalid pixels
+  f = AddTmask(image)
+  d = Dswe(image).select('dswe')
+  newImage = image.select('SurfTemp')
+  pixOut = (newImage.addBands(newImage.select(['SurfTemp'], ['SurfTempMin']))
+            .addBands(newImage.select(['SurfTemp'], ['SurfTempMax']))
+            .addBands(newImage.select(['SurfTemp'], ['SurfTempSD']))
+            .addBands(d)
+            .updateMask(d.eq(1)))
+  combinedReducer = ((ee.Reducer.median().unweighted().forEachBand(pixOut.select(['SurfTemp'])))
+    .combine(ee.Reducer.min().unweighted().forEachBand(pixOut.select(['SurfTempMin'])),'min_', False)
+    .combine(ee.Reducer.max().unweighted().forEachBand(pixOut.select(['SurfTempMax'])),'max_', False)
+    .combine(ee.Reducer.stdDev().unweighted().forEachBand(pixOut.select(['SurfTempSD'])), 'sd_', False)
+    .combine(ee.Reducer.count().unweighted().forEachBand(pixOut.select(['SurfTemp'])), 'pCount_', False))
+  # Collect median temp and occurance values
+  stout = (pixOut.reduceRegions(lakes, combinedReducer, 30))
+  tempOut = stout.map(removeGeo)
+  return tempOut
+
+```
+
+### *Function to monitor running jobs in Earth Engine*
+
+```{python}
+##Function for limiting the max number of tasks sent to
+#earth engine at one time to avoid time out errors
+def maximum_no_of_tasks(MaxNActive, waitingPeriod):
+  ##maintain a maximum number of active tasks
+  time.sleep(10)
+  ## initialize submitting jobs
+  ts = list(ee.batch.Task.list())
+  NActive = 0
+  for task in ts:
+     if ('RUNNING' in str(task) or 'READY' in str(task)):
+         NActive += 1
+  ## wait if the number of current active tasks reach the maximum number
+  ## defined in MaxNActive
+  while (NActive >= MaxNActive):
+    time.sleep(waitingPeriod) # if reach or over maximum no. of active tasks, wait for 2min and check again
+    ts = list(ee.batch.Task.list())
+    NActive = 0
+    for task in ts:
+      if ('RUNNING' in str(task) or 'READY' in str(task)):
+        NActive += 1
+  return()
+
+```
+
+## *Grab the stacks.*
+
+*Set up a counter and list to keep track of what's been done already. We'll use this in case something is wonky and we need to run again.*
+
+```{python}
+## Set up a counter and a list to keep track of what's been done already
+counter = 0
+done = []    
+```
+
+*You can re-run this and the next chucnk and only process the un-processed pathrow combinations because of the pr loop here, just in case something absolutely devastating happens.*
+
+```{python}
+pr = [i for i in pr if i not in done] #this removes pathrow values that have already been processed
+```
+
+*This chunk does the heavy lifting for the reflectance pull*
+
+```{python}
+for tiles in pr:
+  tile = wrs.filterMetadata('PR', 'equals', tiles)
+  # For some reason we need to cast this to a list and back to a
+  # feature collection
+  lakes = locs_feature.filterBounds(tile.geometry())\
+    .map(dpBuff)
+  # snip the ls data by the geometry of the lake points    
+  stack = ls_sr.filterBounds(lakes.geometry()) #this was preivously filtered by the centroid of the tile
+  # map the refpull function across the 'stack', flatten to an array, filter to keep scenes with clouds less than 50%.
+  out = stack.map(RefPull)\
+    .flatten()\
+    .filterMetadata('cScore_clouds','less_than',.5)
+  srname = proj+'_SurfRef_'+str(tiles)+'_v'+str(date.today())
+  dataOut = ee.batch.Export.table.toDrive(collection = out,\
+                                          description = srname,\
+                                          folder = 'LakeReflRepo',\
+                                          fileFormat = 'csv',\
+                                          selectors = ['Aerosol','Blue', 'Green', 'Red', 'Nir', 'Swir1', 'Swir2','pixel_qa', 'hillShadow', 'sd_NirSD','cScore_clouds','pCount_dswe3','pCount_dswe1','system:index'])
+  
+  #Check how many existing tasks are running and take a break of 120 secs if it's >25 
+  maximum_no_of_tasks(25, 120)
+  #Send next task.                                        
+  dataOut.start()
+  counter = counter + 1
+  done.append(tiles)
+  print('done_' + str(counter) + '_' + str(tiles))
+  
+print('done')
+```
+
+*And then this chunk does the heavy lifting for the temp pull*
+
+```{python}
+for tiles in pr:
+  tile = wrs.filterMetadata('PR', 'equals', tiles)
+  # For some reason we need to cast this to a list and back to a
+  # feature collection
+  lakes = locs_feature.filterBounds(tile.geometry())\
+    .map(dpBuff)
+  # snip the ls data by the geometry of the lake points    
+  stack = ls_st.filterBounds(lakes.geometry()) #this was preivously filtered by the centroid of the tile
+  # map the temppull across the stack
+  tempOut = stack.map(TempPull)\
+    .flatten()
+  stname = proj+'_SurfTemp_'+str(tiles)+'_v'+str(date.today())
+  tempDataOut = ee.batch.Export.table.toDrive(collection = tempOut,\
+                                          description = stname,\
+                                          folder = 'LakeTempRepo',\
+                                          fileFormat = 'csv',\
+                                          selectors = ['SurfTemp','sd_SurfTempSD', 'min_SurfTempMin', 'max_SurfTempMax', 'pCount_SurfTemp', 'system:index'])
+  #Check how many existing tasks are running and take a break of 120 secs if it's >25 
+  maximum_no_of_tasks(25, 120)
+  #Send next task.                                        
+  tempDataOut.start()
+  counter = counter + 1
+  done.append(tiles)
+  print('done_' + str(counter) + '_' + str(tiles))
+  
+print('done')
+```

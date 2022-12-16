@@ -28,6 +28,8 @@ library(sf)
 library(plotly)
 library(geomtextpath)
 library(dplyr)
+
+
 ```
 
 ### [**Goals:**]{.underline}
@@ -62,16 +64,30 @@ buffer_sbs <- read_csv('data/sbs_buffer.csv') %>%
   mutate(Buffer_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))
 
 watershed_sbs <- read_csv('data/sbs_watershed.csv') %>%
-  mutate(Watershed_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High)) %>% rename(Site_Code=SITE_CODE)
+  mutate(Watershed_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))
 
 Sites <- read.csv('data/CPF_Sites.csv')
+
+dist_from_pbd <- read.csv('data/Distance_from_PBD.csv')
+
+cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+## This is where i will read in data
+mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
+
+SF_Res <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO", "BEAV", "SFM")
+
+mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
+
+
+all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 
 ```
 
 ## Cleaning data
 
 -   Add Location data to chemistry
--   Adding Site Code
+-   Adding site_code
 -   Joining data from above
 -   Add year column
 -   Creating Seperate DF for Mainstem Work
@@ -79,131 +95,154 @@ Sites <- read.csv('data/CPF_Sites.csv')
 ```{r}
 
 
-Reservoir_Chemistry <- read_csv('data/CPF_Res_Chem_092122.csv')%>%
-  mutate(Date=as.Date(Date,format="%m/%d/%Y"), 
-         Year = year(Date))%>%
+reservoir_chemistry <- read_csv('data/ReservoirChemistry_120522.csv')%>%
+  mutate(Date=as.Date(Date,format="%d-%b-%y"))%>%
   filter(SampleType == "NORM") %>%
-  mutate (FCW_Number = as.numeric(gsub('FCW ', '', LabID)), 
+  mutate (FCW_Number = as.numeric(gsub('FCW ', '', IDNo)), 
           Year =  year(Date), 
-          Site_Code = SiteLabel)%>%
-  mutate(Watershed=ifelse(Site_Code %in% c('LNGR','LNGO'),"Long Draw Reservoir",
-                   ifelse(Site_Code %in% c('PTRO','PTRR'),'Peterson Reservoir',
-                   ifelse(Site_Code %in% c('SLEP','JWC','PNF','PBD', 'PJW','PBR', 'SFM','PSF' ),'CLP Mainstem Canyon',
-                   ifelse(Site_Code %in% c('ELC','ARCH', 'LEGC','TIMB' ),'CLP Mainstem Fort Collins',
-                   ifelse(Site_Code %in% c('JOEI','JOER'),"Joe Wright Reservoir",
-                   ifelse(Site_Code %in% c('CBRI', 'CBRR','CHD'), "Chambers Reservoir",
-                   ifelse(Site_Code %in% c('BRNR','BMD'),"Barnes Meadow Reservoir",
-                   ifelse(Site_Code %in% c('COMR','COMO','COMI'),"Comanche Reservoir","Hourglass Reservoir"))))))))) %>%
-   left_join(select(buffer_sbs,c(Watershed,Buffer_Level)),by="Watershed") %>%
-  left_join(select(watershed_sbs,c(Site_Code,Watershed_Level)),by="Site_Code") %>%
-  left_join(select(Sites,c(Site_Code,Lat,Long)),by="Site_Code") %>%
-  mutate(Season=ifelse(Date <= "2022-06-09", "SPRING",
+          site_code = SiteLabel)%>%
+  mutate(watershed=ifelse(site_code %in% c('LNGR','LNGO'),"Long Draw Reservoir",
+                   ifelse(site_code %in% c('PTRO','PTRR'),'Peterson Reservoir',
+                   ifelse(site_code %in% c('SLEP','JWC','PNF','PBD', 'PJW','PBR', 'SFM','PSF' ),'CLP Mainstem Canyon',
+                   ifelse(site_code %in% c('ELC','ARCH', 'LEGC','TIMB' ),'CLP Mainstem Fort Collins',
+                   ifelse(site_code %in% c('JOEI','JOER'),"Joe Wright Reservoir",
+                   ifelse(site_code %in% c('CBRI', 'CBRR','CHD'), "Chambers Reservoir",
+                   ifelse(site_code %in% c('BRNR','BMD'),"Barnes Meadow Reservoir",
+                   ifelse(site_code %in% c('COMR','COMO','COMI'),"Comanche Reservoir","Hourglass Reservoir"))))))))) %>%
+   left_join(select(buffer_sbs,c(watershed,Buffer_Level)),by="watershed") %>%
+  left_join(select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code")%>%
+  left_join(select(Sites,c(site_code,Lat,Long)),by="site_code") %>%
+  left_join(select(dist_from_pbd,c(site_code,distance_upstream_km)),by="site_code") %>%
+  mutate(season=ifelse(Date <= "2022-06-09", "SPRING",
                 ifelse(Date <= "2022-09-24", "SUMMER", "FALL"))) %>%
-  mutate(Status = ifelse(Site_Code %in% c('LNGR','LNGO','JOEI'),"Unburned",
-                  ifelse(Site_Code %in% c('COMI','COMR','COMO','HORI','HORR','HORO','PTRR','PTRO','CBRR','CHD','BRNR','BMD'), "Burned",                                                                                                            "Partially Burned"))) %>%
-  mutate(Location = ifelse(Site_Code %in% c("LNGR","PTRR","JOER","CBRR","BRNR","COMR","HORR"),"Reservoir",
-                      ifelse(Site_Code %in% c('SLEP','JWC','PNF','PBD', 'PJW','PBR', 'SFM','PSF' ), 'Mainstem',
-                      ifelse(Site_Code %in% c("LNGO","PTRO","CHD","BMD","HORO","COMO"),"Outflow","Inflow"))))%>%
-  mutate(Distance = case_when(Site_Code == 'JOEI' ~ '1 - JOEI',
-                              Site_Code == 'JOER' ~ '2 - JOER',
-                              Site_Code == 'CBRI' ~ '3 - CBRI',
-                              Site_Code == 'CBRR' ~ '4 - CBRR',
-                              Site_Code == 'CHD' ~ '5 - CHD',
-                              Site_Code == 'BRNR' ~ '6',
-                              Site_Code == 'BMD' ~ '7',
-                              Site_Code == 'LNGR' ~ '8',
-                              Site_Code == 'LNGO' ~ '9',
-                              Site_Code == 'PTRR' ~ '99',
-                              Site_Code == 'PTRO' ~ '999',
-                              Site_Code == 'COMI' ~ '11 - COMI',
-                              Site_Code == 'COMR' ~ '12 - COMR',
-                              Site_Code == 'COMO' ~ '13 - COMO',
-                              Site_Code == 'HORI' ~ '14 - HORI',
-                              Site_Code == 'HORR' ~ '15 - HORR',
-                              Site_Code == 'HORO' ~ '16 - HORO',
-                              Site_Code == 'BEAV' ~ '17 - BEAV',
-                              Site_Code == 'JWC' ~ '18 - JWC',
-                              Site_Code == 'PJW' ~ '19 - PJW',
-                              Site_Code == 'SLEP' ~ '20 - SLEP',
-                              Site_Code == 'PBR' ~ '21 - PBR',
-                              Site_Code == 'SFM' ~ '22 - SFM',
-                              Site_Code == 'PSF' ~ '23 - PSF',
-                              Site_Code == 'PNF' ~ '24 - PNF',
-                              Site_Code == 'PBD' ~ '25 - PBD'
+  mutate(status = ifelse(site_code %in% c('LNGR','LNGO','JOEI'),"Unburned",
+                  ifelse(site_code %in% c('COMI','COMR','COMO','HORI','HORR','HORO','PTRR','PTRO','CBRR','CHD','BRNR','BMD'), "Burned",                                                                                                            "Partially Burned"))) %>%
+  mutate(Location = ifelse(site_code %in% 
+                             c("LNGR","PTRR","JOER","CBRR","BRNR","COMR","HORR"),"Reservoir",
+                      ifelse(site_code %in% c("SLEP","JWC","PNF","PBD", "PJW","PBR", "SFM","PSF" ), "Mainstem",
+                      ifelse(site_code %in% c("LNGO","PTRO","CHD","BMD","HORO","COMO"),"Outflow","Inflow"))))%>%
+  mutate(Distance = case_when(site_code == 'JOEI' ~ '1 - JOEI',
+                              site_code == 'JOER' ~ '2 - JOER',
+                              site_code == 'CBRI' ~ '3 - CBRI',
+                              site_code == 'CBRR' ~ '4 - CBRR',
+                              site_code == 'CHD' ~ '5 - CHD',
+                              site_code == 'BRNR' ~ '6',
+                              site_code == 'BMD' ~ '7',
+                              site_code == 'LNGR' ~ '8',
+                              site_code == 'LNGO' ~ '9',
+                              site_code == 'PTRR' ~ '99',
+                              site_code == 'PTRO' ~ '999',
+                              site_code == 'COMI' ~ '11 - COMI',
+                              site_code == 'COMR' ~ '12 - COMR',
+                              site_code == 'COMO' ~ '13 - COMO',
+                              site_code == 'HORI' ~ '14 - HORI',
+                              site_code == 'HORR' ~ '15 - HORR',
+                              site_code == 'HORO' ~ '16 - HORO',
+                              site_code == 'BEAV' ~ '17 - BEAV',
+                              site_code == 'JWC' ~ '18 - JWC',
+                              site_code == 'PJW' ~ '19 - PJW',
+                              site_code == 'SLEP' ~ '20 - SLEP',
+                              site_code == 'PBR' ~ '21 - PBR',
+                              site_code == 'SFM' ~ '22 - SFM',
+                              site_code == 'PSF' ~ '23 - PSF',
+                              site_code == 'PNF' ~ '24 - PNF',
+                              site_code == 'PBD' ~ '25 - PBD'
                               )) %>%
-  mutate(Xdistance = case_when(Site_Code == 'JOEI' ~ 1,
-                              Site_Code == 'JOER' ~ 2,
-                              Site_Code == 'CBRI' ~ 3,
-                              Site_Code == 'CBRR' ~ 4,
-                              Site_Code == 'CHD' ~ 5,
-                              Site_Code == 'LNGR' ~ 6,
-                              Site_Code == 'BRNR' ~ 7,
-                              Site_Code == 'COMI'~ 12,
-                              Site_Code == 'COMR'~ 13,
-                              Site_Code == 'COMO'~ 14,
-                              Site_Code == 'HORI'~ 15,
-                              Site_Code == 'HORR'~ 16,
-                              Site_Code == 'HORO'~ 17,
-                              Site_Code == 'BEAV'~ 18,
-                              Site_Code == 'JWC'~ 19,
-                              Site_Code == 'PJW'~ 20,
-                              Site_Code == 'SLEP'~ 21,
-                              Site_Code == 'PBR'~ 22,
-                              Site_Code == 'SFM'~ 23,
-                              Site_Code == 'PSF'~ 24,
-                              Site_Code == 'PNF'~ 25,
-                              Site_Code == 'PBD'~ 26)) %>%
-  dplyr::arrange(as.factor(Status)) %>%
-  dplyr::filter(!Watershed %in% c('Hourglass','Comanche')) %>%
-  mutate(order = case_when(Site_Code =="JOEI" ~ "03",
-                        Site_Code == "LNGR" ~ "01",
-                        Site_Code == "LNGO" ~ "02",
-                        Site_Code == "JOER" ~ "04",
-                        Site_Code == "CBRI" ~ "05",
-                        Site_Code == "CBRR" ~ "06",
-                        Site_Code == "CHD" ~ "07",
-                        Site_Code == "PTRR" ~ "08",
-                        Site_Code == "PTRO" ~ "09",
-                        Site_Code == "BRNR" ~ "10",
-                        Site_Code == "BMD" ~ "11",
-                        Site_Code == "COMI"~ "12",
-                        Site_Code == "COMR" ~ "13",
-                        Site_Code == "COMO"~ "14",
-                        Site_Code == "HORI"~ "15",
-                        Site_Code == "HORR"~ "16",
-                        Site_Code == "HORO"~ "17",
-                        Site_Code == "BEAV"~ "18",
-                        Site_Code == "JWC"~ "19",
-                        Site_Code == "PJW"~ "20",
-                        Site_Code == "SLEP"~ "21",
-                        Site_Code == "PBR"~ "22",
-                        Site_Code == "SFM"~ "23",
-                        Site_Code == "PSF" ~ "24",
-                        Site_Code == "PNF"~ "25",
-                        Site_Code == "PBD"~ "26",))%>%
-  dplyr::arrange(as.factor(Status))
+  mutate(Xdistance = case_when(site_code == 'JOEI' ~ 1,
+                              site_code == 'JOER' ~ 2,
+                              site_code == 'CBRI' ~ 3,
+                              site_code == 'CBRR' ~ 4,
+                              site_code == 'CHD' ~ 5,
+                              site_code == 'LNGR' ~ 6,
+                              site_code == 'BRNR' ~ 7,
+                              site_code == 'COMI'~ 12,
+                              site_code == 'COMR'~ 13,
+                              site_code == 'COMO'~ 14,
+                              site_code == 'HORI'~ 15,
+                              site_code == 'HORR'~ 16,
+                              site_code == 'HORO'~ 17,
+                              site_code == 'BEAV'~ 18,
+                              site_code == 'JWC'~ 19,
+                              site_code == 'PJW'~ 20,
+                              site_code == 'SLEP'~ 21,
+                              site_code == 'PBR'~ 22,
+                              site_code == 'SFM'~ 23,
+                              site_code == 'PSF'~ 24,
+                              site_code == 'PNF'~ 25,
+                              site_code == 'PBD'~ 26)) %>%
+  dplyr::arrange(as.factor(status)) %>%
+  dplyr::filter(!watershed %in% c('Hourglass','Comanche')) %>%
+  mutate(order = case_when(site_code =="JOEI" ~ "03",
+                        site_code == "LNGR" ~ "01",
+                        site_code == "LNGO" ~ "02",
+                        site_code == "JOER" ~ "04",
+                        site_code == "CBRI" ~ "05",
+                        site_code == "CBRR" ~ "06",
+                        site_code == "CHD" ~ "07",
+                        site_code == "PTRR" ~ "08",
+                        site_code == "PTRO" ~ "09",
+                        site_code == "BRNR" ~ "10",
+                        site_code == "BMD" ~ "11",
+                        site_code == "COMI"~ "12",
+                        site_code == "COMR" ~ "13",
+                        site_code == "COMO"~ "14",
+                        site_code == "HORI"~ "15",
+                        site_code == "HORR"~ "16",
+                        site_code == "HORO"~ "17",
+                        site_code == "BEAV"~ "18",
+                        site_code == "JWC"~ "19",
+                        site_code == "PJW"~ "20",
+                        site_code == "SLEP"~ "21",
+                        site_code == "PBR"~ "22",
+                        site_code == "SFM"~ "23",
+                        site_code == "PSF" ~ "24",
+                        site_code == "PNF"~ "25",
+                        site_code == "PBD"~ "26",))%>%
+  dplyr::arrange(as.factor(status))
 
 
-write.csv(Reservoir_Chemistry, 
-          "data/Prepped_Reservoir_Chemistry.csv")
+write.csv(reservoir_chemistry, 
+          "data/prepped_reservoir_chemistry.csv")
 
-write.csv(filter(Reservoir_Chemistry, Location == "Mainstem"),
-          "data/Prepped_Mainstem_Chemistry.csv")
+write.csv(filter(reservoir_chemistry, Location == "Mainstem"),
+          "data/prepped_mainstem_chemistry.csv")
 
-Reservoir_Chemistry_Concise <- Reservoir_Chemistry%>%
-  select(Site, Site_Code, Date,Lat,Long,Watershed,Watershed_Level, Status,Location, Turbidity,TSS,ChlA,DOC,DTN,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4)
+reservoir_chemistry_concise <- reservoir_chemistry%>%
+  select(Site, site_code, Date,Lat,Long,watershed,Watershed_Level, status,Location, Turbidity,TSS,ChlA,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4)
 
 
-write.csv(Reservoir_Chemistry_Concise, 
-          "data/CPF_Reservoir_chemistry_up_to_083122.csv")
-#Res_Chem_longer <- Reservoir_Chemistry%>%
+write.csv(reservoir_chemistry_concise, 
+          "data/CPF_reservoir_chemistry_up_to_110122.csv")
+#Res_Chem_longer <- reservoir_chemistry%>%
  # pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3), names_to = "Variable", values_to = "Measurement")
 
-#String objects by sampling campaign
+
+```
+
+## Sample determination
+
+```{r}
 
 
+#Determning number of Samples....
 
+reservoir_chemistry <- read.csv("data/CamPkChem.csv")%>%
+  select(Date, SiteLabel ,ChlA)%>%
+  mutate(Date = as.Date.character(Date,format = "%d-%b-%y"),
+         yr = year(Date),
+    campaign = ifelse(SiteLabel %in% all_res_system, "Reservoir", 
+                    ifelse(SiteLabel %in% ISCO, "ISCO",
+                    ifelse(SiteLabel %in% Mainstem_sites, "Mainstem", "Tributary")) ))
 
+#samples by year and campaign
 
+res_chem_2022 <- reservoir_chemistry%>%
+  group_by(yr, campaign)%>%
+  summarise( n = n())
 
+# number of unique chla measurements
+unique_chla <- reservoir_chemistry%>%
+  drop_na()%>%
+  group_by(yr, campaign)%>%
+  summarise( n = n())
 ```

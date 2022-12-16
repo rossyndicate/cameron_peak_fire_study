@@ -1,0 +1,179 @@
+---
+title: "Temp Figures and Trends for CPL lakes"
+author: "B Steele"
+format: html
+editor: visual
+---
+
+## Purpose
+
+Create some compelling figures from the Landsat-derived surface temperature dataset.
+
+## Prep environment
+
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(anomalize)
+library(ggplot2)
+library(cowplot)
+knitr::opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study/CPL")
+```
+
+## Prep data
+
+Filter out the anomalous data
+
+```{r}
+tempData <- read_csv("CPL/data/CLP_flagged_SurfTemp_Landsat5-9_v02Dec2022.csv")%>% 
+  filter(anomaly == 'No') %>% 
+  mutate(date = as.Date(date, format = "%m/%d/%Y"))
+
+```
+
+Do a quick vis:
+
+```{r}
+ggplot(tempData, aes(x = date, y = SurfTemp_degC, color = Name)) +
+  geom_point() +
+  facet_grid(Name ~ .) +
+  theme_bw() +
+  scale_color_colorblind()
+```
+
+For consistency, let's just look at data after L7 came online (April 1999)
+
+```{r}
+tempData_recent <- tempData %>% 
+  filter(date >= as.Date('1999-04-01'))
+
+ggplot(tempData_recent, aes(x = date, y = SurfTemp_degC, color = Name)) +
+  geom_point() +
+  facet_grid(Name ~ .) +
+  theme_bw() +
+  scale_color_colorblind()
+```
+
+## Time Series Analysis
+
+Let's use the `anomalize` package to determine the season-adjusted trends for each lake using functions.
+
+```{r}
+formatData = function(lake){
+  lakeData <- tempData_recent %>% 
+    filter(Name == lake)
+  as_tibble(lakeData)
+}
+
+
+calcSeasonAdjTrends = function(lakeTibble){
+  lakeTibble %>% 
+    time_decompose(SurfTemp_degC, merge = T) 
+}
+
+graphTrendObs = function(seasonAdjTrends) {
+  lakeName = seasonAdjTrends$Name[1]
+  ggplot(seasonAdjTrends, aes(x = date, y = observed)) +
+    geom_point(color = 'gray') +
+    labs(x = NULL, 
+         y = NULL,
+         title = paste0(lakeName)) +
+    geom_point(aes(y = trend), color = '#E69F00') +
+    geom_smooth(aes(y = trend), lty = 2) +
+    theme_bw() +
+    theme(plot.title = element_text(face = 'bold', hjust = 0.5, size = 12))
+}
+```
+
+Apply functions to each reservoir
+
+```{r}
+
+BM = formatData('Barnes Meadow Reservoir')
+BM_trends = calcSeasonAdjTrends(BM)
+BMRes = graphTrendObs(BM_trends)
+
+CL = formatData('Chambers Lake')
+CL_trends = calcSeasonAdjTrends(CL)
+CLake = graphTrendObs(CL_trends)
+
+HaR = formatData('Halligan Reservoir')
+HaR_trends = calcSeasonAdjTrends(HaR)
+HalliganRes <- graphTrendObs(HaR_trends)
+
+HoR = formatData('Horsetooth Reservoir')
+HoR_trends = calcSeasonAdjTrends(HoR)
+HorsetoothRes <- graphTrendObs(HoR_trends)
+
+JW = formatData('Joe Wright Reservoir')
+JW_trends = calcSeasonAdjTrends(JW)
+JWRes <- graphTrendObs(JW_trends)
+
+LD = formatData('Long Draw Reservoir')
+LD_trends = calcSeasonAdjTrends(LD)
+LDRes <- graphTrendObs(LD_trends)
+
+MS = formatData('Milton Seaman Reservoir')
+MS_trends = calcSeasonAdjTrends(MS)
+MSRes <- graphTrendObs(MS_trends)
+
+PL = formatData('Peterson Lake')
+PL_trends = calcSeasonAdjTrends(PL)
+PLake <- graphTrendObs(PL_trends)
+
+```
+
+Plot them together
+
+```{r}
+plot_grid(NULL, BMRes, 
+          NULL, CLake, 
+          NULL, HalliganRes, 
+          NULL, HorsetoothRes, 
+          NULL, JWRes, 
+          NULL, LDRes, 
+          NULL, MSRes, 
+          NULL, PLake, 
+          ncol = 2, 
+          rel_widths = c(0.05, 0.95))+
+draw_label("estimated lake surface temperature (°C)", x=  0, y=0.5, vjust= 1.5, angle=90)
+
+ggsave('stacked_temptrends_CLP.jpg',
+       height = 9, 
+       width = 12,
+       dpi = 300)
+```
+
+## Put them back together
+
+Rejoin all
+
+```{r}
+tempTrends <- full_join(Barnes, Chambers) %>% 
+  full_join(., Halligan) %>% 
+  full_join(., Horsetooth) %>% 
+  full_join(., JoeWright) %>% 
+  full_join(., LongDraw) %>% 
+  full_join(., MiltonSeaman) %>% 
+  full_join(., Peterson)
+```
+
+And let's select just lake, date, temp, and the trend and then orient vertically to plot
+
+```{r}
+tempTrends_vert <- tempTrends %>% 
+  select(Name, date, SurfTemp_degC, trend) %>% 
+  pivot_longer(names_to = 'temp_var', values_to = 'value', cols = c(SurfTemp_degC, trend))
+```
+
+And now plot together
+
+```{r}
+ggplot(tempTrends_vert, aes(x = date, y = value, color = temp_var)) +
+  geom_point() +
+  facet_grid(Name ~ .) +
+  labs(x = NULL, y = 'Landsat-derived surface temperature (degC)') +
+  theme_bw() + 
+  scale_color_colorblind() +
+  theme(legend.position = 'bottom')
+```
