@@ -79,39 +79,61 @@ mutate(DateTime = as_datetime(DT) - hrs,
 
 
 
-PBR_DO <- read.csv("data/PBR_DO_50122_110822.csv")%>%
+PBR_DO <- read.csv("data/raw_files/PBR_DO_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M"),
     DO_mgL = Value,
     Quality = Data.Quality, 
-    Date = as.Date(DateTime)
+    Date = as.Date(DateTime),
+    site_code = "PBR"
   )%>%
   filter(between(DO_mgL,7,12))
 
-PBR_TEMP <- read.csv("data/PBR_TEMP_50122_110822.csv")%>%
+PBR_TEMP <- read.csv("data/raw_files/PBR_TEMP_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M"),
     temp_c = Value,
     Quality = Data.Quality, 
-    Date = as.Date(DateTime)
+    Date = as.Date(DateTime),
+    site_code = "PBR"
   )
 
 
 
-Manners_Bridge_DO <- read.csv("data/Manners_Bridge_DO_50122_110822.csv")%>%
+Manners_Bridge_DO <- read.csv("data/raw_files/Manners_Bridge_DO_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M"),
     DO_mgL = Value,
-    Quality = Data.Quality, 
-    Date = as.Date(DateTime))%>%
+    temp_c = NA,
+    Date = as.Date(DateTime), 
+    site_code = "Manners Bridge")%>%
    filter(between(DO_mgL,6,13))
 
-Manners_Bridge_TEMP <- read.csv("data/Manners_Bridge_TEMP_50122_110822.csv")%>%
+Manners_Bridge_TEMP <- read.csv("data/raw_files/Manners_Bridge_TEMP_50122_110822.csv")%>%
   transmute(
-    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M"),
     temp_c = Value,
-    Quality = Data.Quality, 
-    Date = as.Date(DateTime))
+    DO_mgL = NA,
+    Date = as.Date(DateTime), 
+    site_code = "Manners Bridge")
+
+
+concise_do <- Manners_Bridge_TEMP%>%
+ full_join(select(Manners_Bridge_DO,c(DO_mgL, temp_c, Date,  DateTime, site_code)), by = "DateTime")
+
+manners_pbr_do <- Manners_Bridge_DO%>%
+  select(DO_mgL, DateTime, site_code)%>%
+  rbind(select(PBR_DO,c(DO_mgL, DateTime, site_code)))
+
+
+manners_pbr_temp <- Manners_Bridge_TEMP%>%
+  select(temp_c, DateTime, site_code)%>%
+  rbind(select(PBR_TEMP,c(temp_c, DateTime, site_code)))
+
+m_pbr_temp_do <- manners_pbr_do%>%
+  left_join(manners_pbr_temp, by = c("DateTime", "site_code"))
+
+write.csv(m_pbr_temp_do, file = "data/manners_pbr_temp_do.csv")
 ```
 
 ## Plotting

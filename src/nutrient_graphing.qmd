@@ -39,7 +39,7 @@ All_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD"
 
 #Determning number of Samples....
 
-Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
+Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry-DESKTOP-K61OFQI.csv")%>%
   mutate(Date = as.Date(Date),
          Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow")))%>% rename(Watershed = watershed)%>%
 filter( Watershed != "Comanche Reservoir" & Watershed != "Hourglass Reservoir"& Year>= "2021")
@@ -49,7 +49,7 @@ cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2"
 
 ```
 
-## Functions 
+## Functions
 
 ```{r}
 
@@ -92,7 +92,7 @@ res_only_data%>%
   scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
   #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
   labs(x = "", y = nutrient) +
-  theme_bw(base_size=15) +
+  theme_bw(base_size=28) +
   theme(legend.position = "none",
   strip.background = element_blank(),
   strip.text.x = element_blank())+
@@ -112,7 +112,7 @@ res_only_data%>%
   scale_color_gradient2(name="Contributing Area Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", guide="colourbar", midpoint=0.225, limits=c(0,0.45576),) +
   #geom_abline(aes(slope=0, intercept=2.5), color='black', linetype="dashed") +
   labs(x = "", y = nutrient) +
-  theme_bw(base_size=15) +
+  theme_bw(base_size=28) +
   theme(legend.position = "none")+
   facet_wrap(~Year, scales = "free_x")
 
@@ -296,12 +296,13 @@ na_timeline_title <- nutrient_timeline_w_title_graph("Na (mg/L)")
 
 # timeline graphs 1
 
-ggarrange(sc_timeline_title,no3_timeline,po4_timeline,so4_timeline,f_timeline,k_timeline, na_timeline, ca_timeline, cl_timeline,mg_timeline,   ncol=1, nrow=12)#, common.legend=T) 
+ggarrange(sc_timeline_title,no3_timeline,po4_timeline,so4_timeline,f_timeline,k_timeline, na_timeline, ca_timeline, cl_timeline,mg_timeline_title,   ncol=1, nrow=12)#, common.legend=T) 
 
+ggarrange(sc_timeline_title,no3_timeline,po4_timeline,so4_timeline,f_timeline,   ncol=1, nrow=5)
+ggsave('output/nutrient_timeline_1_final.jpg', width = 24, height = 20, units = "in", dpi = 300)
 
-ggsave('output/nutrient_timeline_test_sc_no3_po4_so4_f_k_na_ca_cl_mg.jpg', width = 16, height = 24)
-
-
+ggarrange(na_timeline_title, mg_timeline,k_timeline, ca_timeline, cl_timeline,   ncol=1, nrow=5)
+ggsave('output/nutrient_timeline_2_final.jpg', width = 24, height = 20, units = "in", dpi = 300)
 
 # extra timeline graphs
 
@@ -340,18 +341,18 @@ sc_boxplot_title <- nutrient_boxplot_w_title_graph28('SC (uS/cm)')
 #boxplot fig 1
 
  ggarrange(sc_boxplot_title,no3_boxplot,po4_boxplot,so4_boxplot,k_boxplot, ncol=1, nrow=6)#, common.legend=T) 
- ggsave('output/nutrient_boxplot_SC_NO3_PO4_SO4_K.jpg', width = 12.5, height = 16)
+ ggsave('output/nutrient_boxplot_final_SC_NO3_PO4_SO4_K.jpg', width = 12.5, height = 16, dpi = 300)
  
  
 
 #extra boxplot fig
 ggarrange(no3_boxplot_title,po4_boxplot,k_boxplot, cl_boxplot, ncol=1, nrow=4)
-ggsave('output/no3_po4_k_cl_boxplot.jpg', width = 12.5, height = 15)
+ggsave('output/no3_po4_k_cl_boxplot_final.jpg', width = 12.5, height = 15, dpi = 300)
 
 
 #Larger plot
 ggarrange(no3_boxplot_title,po4_boxplot,so4_boxplot,k_boxplot,na_boxplot,sc_boxplot_title,mg_boxplot,ca_boxplot,f_boxplot,cl_boxplot, ncol=1, nrow=10)
-ggsave('output/nutrient_boxplot_ONEROW_SC_NO3_SO4_Mg_F_PO4_K_Na_Ca_Cl.jpg', width = 30, height = 36)
+ggsave('output/nutrient_boxplot_final_ONEROW_SC_NO3_SO4_Mg_F_PO4_K_Na_Ca_Cl.jpg', width = 30, height = 36, units= "in",dpi = 300)
 
 
 ```

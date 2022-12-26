@@ -1,0 +1,274 @@
+---
+title: "DO Analysis"
+author: "Sam Struthers"
+format:
+  html:
+  embed-resources: true
+    self-contained-math: true
+code-fold: true
+warning: false
+editor: visual
+---
+
+```{r, setup, include=FALSE}
+
+knitr::opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study")
+
+```
+
+## Importing Data
+
+```{r}
+
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(ggthemes)
+library(scales)
+library(corrplot)
+library(lubridate)
+library(sf)
+#library(mapview)       Takes time to load, not using it yet
+library(plotly)
+library(geomtextpath)
+library(dplyr)
+
+
+```
+
+## Pulling in Cleaned Data
+
+```{r}
+
+
+
+
+PBR_DO <- read.csv("data/PBR_DO_50122_110822.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DO_mgL = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime))%>%
+  filter(between(DO_mgL,7,12))%>%
+  mutate(Site_Code = "PBR")
+
+PBR_TEMP <- read.csv("data/PBR_TEMP_50122_110822.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    temp_c = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime)
+  )
+
+
+
+Manners_Bridge_DO <- read.csv("data/Manners_Bridge_DO_50122_110822.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    DO_mgL = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime))%>%
+   filter(between(DO_mgL,6,13))%>%
+  mutate(Site_Code = "Manners Bridge")
+
+Manners_Bridge_TEMP <- read.csv("data/Manners_Bridge_TEMP_50122_110822.csv")%>%
+  transmute(
+    DateTime = as.POSIXct(Reading, tz= "UTC", format= "%Y-%m-%d %H:%M:%S"),
+    temp_c = Value,
+    Quality = Data.Quality, 
+    Date = as.Date(DateTime))
+
+Cleaned_DO_Sensors <- read.csv("data/Clean_CPF_DO_111422.csv")%>%
+  mutate(DateTime = as.POSIXct(DateTime, tz = "UTC", format = "%Y-%m-%dT%H:%M:%SZ"))
+
+# all sites, do, dt and site code only
+concise_do <- Cleaned_DO_Sensors%>%
+  select(DO_mgL, DateTime, Site_Code)%>%
+ rbind(select(PBR_DO,c(DO_mgL, DateTime, Site_Code)))%>%
+  rbind(select(Manners_Bridge_DO,c(DO_mgL, DateTime, Site_Code)))
+                                                                                   
+
+Clean_DO_Graph <- ggplot()+
+  geom_smooth(data = Cleaned_DO_Sensors, aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
+geom_smooth(data = PBR_DO , aes( x= DateTime, y = DO_mgL ) ,color = "Black")+
+  theme_bw()
+
+#ggplotly(Clean_DO_Graph)
+  
+  
+```
+
+# Handheld Sensor Data
+
+Here is where the handheld sensor data will be imported and graphed
+
+```{r}
+Sites <- read.csv("data/CPF_Sites.csv")
+
+
+Field_Values <- read.csv("data/FIELD_DO_COND_TEMP.csv")%>%
+  mutate(Date = as.Date(Date, format = "%m/%d/%Y"),
+         DateTime = as.POSIXct(paste(Date, Time), tz = "UTC", format = "%Y-%m-%d %H:%M"), 
+        dayofyear = yday(Date),
+         Type = "Handheld",
+         Site_Code = Site)%>%
+  left_join(select(Sites,c(Site_Code,Lat,Long, Campaign, Type)),by="Site_Code")%>%
+  mutate(handheld_temp_c = Temp_C, 
+         handheld_do_mgL = DO_mg_L,
+         handheld_cond_ms_cm = Cond_ms_cm,
+         site = Site_Code)
+
+
+
+Field_Values_Longer <- Field_Values%>%
+  pivot_longer(cols = c(Temp_C,Cond_ms_cm, DO_mg_L),names_to = "Variable", values_to = "Measurement")
+
+
+
+
+Handheld_graph_Mainstem_RES <- filter(Field_Values_Longer,Site!= "BMD"  & Campaign == "Chambers Complex")%>%
+  ggplot(aes(x= Date, y = Measurement, group = Site, colour = Site))+
+  geom_point()+
+    facet_wrap(~Campaign + Variable , scales = "free_y")
+
+
+
+
+
+Handheld_and_sensor <- ggplot()+
+  geom_point(data= filter(Field_Values, Site!= "BMD" & Campaign == "Chambers Complex" |Campaign == "Mainstem"), aes(x=DateTime, y= DO_mg_L, colour = Site) )+
+  geom_line(data = Cleaned_DO_Sensors, aes( x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code))+
+geom_line(data = PBR_DO , aes( x= DateTime, y = DO_mgL ) ,color = "Black")+
+    theme_bw()
+
+
+#Handheld graph
+#ggplotly(Handheld_graph_Mainstem_RES)
+
+#Handheld Correlated with sensors
+#ggplotly(Handheld_and_sensor)
+
+```
+
+## Daily Means
+
+This chunk will group the sensor data by date and take the means value. Dates will be matched with grab samples to show when grab samples were taken.
+
+```{r}
+
+daily_means_sensor <- Cleaned_DO_Sensors%>%
+  mutate(dayofyear = yday(DateTime), 
+         Date = date(DateTime), 
+         site = Site_Code)%>%
+  group_by(dayofyear, site,Date)%>%
+  summarise(mean_DO_mgL = mean(DO_mgL), 
+            mean_temp_c = mean(Temp_C))%>%
+  ungroup()
+
+daily_means_pbr_do <- PBR_DO%>%
+  mutate(dayofyear = yday(DateTime), 
+         Date = date(DateTime))%>%
+  group_by(dayofyear,Date)%>%
+  summarise(mean_DO_mgL = mean(DO_mgL))%>%
+  ungroup()%>%
+  mutate(site = "PBR")
+
+daily_means_pbr_temp <- PBR_TEMP%>%
+  mutate(dayofyear = yday(DateTime), 
+         Date = date(DateTime))%>%
+  group_by(dayofyear,Date)%>%
+  summarise(mean_temp_c = mean(temp_c))%>%
+  ungroup()%>%
+  mutate(site = "PBR")
+
+daily_means_pbr<- daily_means_pbr_do%>%
+  left_join(select(daily_means_pbr_temp, c(mean_temp_c,dayofyear)), by = "dayofyear")
+
+
+daily_means <- rbind(daily_means_pbr, daily_means_sensor)
+
+
+
+
+```
+
+## Combining with samples
+
+Pulling in sample IDs for sites where we have DO sensors, matching it to daily means.
+
+```{r}
+
+site_labels <- c("CBRI", "JOEI", "CHD", "JWC", "PJW", "PNF", "PBD", "SFM", "PSF" )
+
+cam_pk_chem <- read.csv("data/cam_pk_master_110322.csv")%>%
+  filter(Era == "FCW" )%>%
+  filter(SiteLabel %in% site_labels)%>%
+  mutate( grab_date  = as.Date(Date, format = "%d-%b-%y"), 
+          Year = year(grab_date), 
+          dayofyear = yday(grab_date))%>%
+  filter(Year >=2022)%>%
+  filter(SampleType %in% c("NORM"))%>%
+  select(grab_date, SiteLabel, Era, EraSamp, dayofyear, SampleType)%>%
+mutate(site=SiteLabel)
+
+
+
+sample_by_day <- cam_pk_chem%>%
+  select(site, dayofyear, SampleType, EraSamp)
+
+
+
+daily_means_w_samples <- daily_means%>%
+  #left_join( select(cam_pk_chem, c(Site, SiteLabel, dayofyear, grab_date,SampleType, Era )), by = "dayofyear")%>%
+  left_join( select(sample_by_day, c(site, dayofyear, EraSamp )), by = c("site", "dayofyear") )%>%
+  left_join( select(Field_Values, c(site,dayofyear,handheld_temp_c, handheld_do_mgL, handheld_cond_ms_cm )), by = c("site", "dayofyear") )
+
+
+daily_means_w_samples_graph <- daily_means_w_samples%>%
+  ggplot()+
+  geom_line(aes(x= Date, y = mean_DO_mgL,group = site, color = site))+
+  geom_point(aes(x= Date, y = handheld_do_mgL , color = site))+
+  theme_bw()
+
+ggplotly(daily_means_w_samples_graph)
+
+
+
+# write csv
+
+write_csv(daily_means_w_samples, "data/mean_daily_do_temp_FCW.csv")
+```
+
+# JW and Chambers release water graph
+
+Attempt to show how a Joe Wright release will affect DO in the Mainstem
+
+```{r}
+
+
+
+do_release_dataset <- filter(concise_do,  Site_Code  %in% c("JWC", "CBRI","JOEI", "CHD", "PBR"))%>%
+  filter(DateTime <= '2022-09-25'&DateTime >= '2022-09-10')
+
+
+#graph 
+
+do_release_graph <- do_release_dataset%>%
+  ggplot()+
+  geom_line(aes(x= DateTime, y = DO_mgL, group = Site_Code, color = Site_Code ), size =1)+
+  scale_color_manual(name = "Site", labels= c(
+                                               "JOEI", 
+                                               "CBRI",
+                                               "CHD",
+                                               "JWC",
+                                               "PBR"), values = c("JOEI" = '#0077BB', "CBRI" = '#009988',  "CHD"= '#EE7733', "JWC" = '#CC3311', "PBR" = "#BBBBBB" ))+
+  theme_bw(base_size = 24)+
+   theme(legend.justification = c(.95,0.05) , legend.position = c(.95,0.05))+
+  #labs( color="Site") +
+   xlab("Date") +
+   ylab("Dissolved Oxygen (mg/L)")
+
+plot(do_release_graph)
+
+ggsave("output/do_joer_chambers_release_september.jpg", width = 14, height = 8)
+```

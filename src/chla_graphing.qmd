@@ -40,7 +40,7 @@ mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
 
 all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 
-reservoir_chemistry <- read.csv("data/prepped_reservoir_chemistry.csv")%>%
+reservoir_chemistry <- read.csv("data/prepped_reservoir_chemistry-DESKTOP-K61OFQI.csv")%>%
   mutate(Date = as.Date(Date),
          Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow", "Mainstem")))
 
@@ -203,10 +203,10 @@ chla_long <- main_res_chla_longitudinal%>%
   #scale_color_colorblind()+
    scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E'))+
    scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E'))+
-   theme_bw(base_size=26) +
+   theme_bw(base_size=30) +
    labs(shape = "", color="") +
    theme(axis.text.x = element_blank(), 
-         legend.text = element_text(size = 15)) +
+         legend.text = element_text(size = 18)) +
    xlab("") +
    ylab("Chlorophyll a (μg/L)")
 
@@ -221,7 +221,8 @@ plot(chla_long)
    geom_point( aes(x=Distance, y=NO3, shape = location_type, color=Date), size=8, alpha = .7) +
    scale_color_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E'))+
    scale_fill_manual(values=c('#047E82','#397534','#59B851','#DEB907','#FA850E')) +
-   theme_bw(base_size=26) +
+   theme_bw(base_size=30) +
+   theme(legend.text = element_text(size =18))+
    labs(shape = "", color="") +
    scale_x_discrete(labels=c("1 - JOEI" = "Above Joe Wright", "2 - JOER" = "", "3 - CBRI" = "Above Chambers",
                          "4 - CBRR" = "", "5 - CHD" = "Below Chambers")) +
@@ -237,7 +238,7 @@ plot(chla_long)
 ggarrange(chla_long,no3_long, ncol=1, nrow=2, common.legend=T)
  
  
- ggsave('output/2022_joer_cbrr_chla_no3_longitudinal.jpg', width=13.5, height=10)
+ ggsave('output/2022_joer_cbrr_chla_no3_longitudinal_FINAL.jpg', width=15.5, height=10, dpi = 300)
  
  #highlighted version of graph for presentations
  
@@ -248,7 +249,7 @@ ggarrange(chla_long,no3_long, ncol=1, nrow=2, common.legend=T)
  ggarrange(chla_long_highlighted,no3_long_highlighted, ncol=1, nrow=2, common.legend=T)
  
  
- ggsave('output/2022_joer_cbrr_chla_no3_longitudinal_highlighted.jpg', width=13.5, height=10)
+ ggsave('output/2022_joer_cbrr_chla_no3_longitudinal_highlighted.jpg', width=15, height=10)
 ```
 
 ### South Fork Reservoir
@@ -417,10 +418,13 @@ plot(chla_timeline)
 
 ###CHLA  BOXPLOT GRAPH ###
 chla_boxplot <- main_reservoir_chla %>%
-ggplot() + 
-geom_boxplot(aes(x=reorder(site_code,order,max),y=ChlA, middle=mean(ChlA), fill=Watershed_Level))+
-
-   geom_dotplot(aes(x=reorder(site_code,order,max),y=ChlA, middle=mean(ChlA), fill = Watershed_Level), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .5, dotsize = 1, alpha = .7)+
+ggplot(aes(x=reorder(site_code,order,max),y=ChlA )) + 
+#geom_boxplot(aes(x=reorder(site_code,order,max),y=ChlA, middle=mean(ChlA), fill=Watershed_Level))
+  
+   geom_dotplot(aes( fill = Watershed_Level), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .5, dotsize = 1, alpha = .7)+
+  stat_summary(fun.y = median, fun.ymin = median, fun.ymax = median,
+                 geom = "crossbar", width = .75)+
+  
   scale_fill_gradient2(name="Watershed Burn Intensity",low="#56B4E9", mid="#F0E442", high="#D55E00", 
                         guide="colourbar", midpoint=0.225, limits=c(0,0.45576),)+
   scale_color_grey(start = 0.4, end = 0)+
@@ -445,7 +449,7 @@ plot(chla_boxplot)
 
 
 ggarrange(chla_timeline, chla_boxplot, nrow = 2, ncol = 1)
-ggsave('output/main_study_reservoirs_timeline_dot_and_boxplot.jpg',width=15,height=10)
+ggsave('output/main_study_reservoirs_timeline_dot_and_boxplot_final.jpg',width=15,height=10, units ="in", dpi = 300)
 
 ```
 
@@ -858,7 +862,7 @@ barnes_effect_dataset <- filter(reservoir_chemistry, Year == "2022")%>%
          dist = as.character(distance_upstream_km))
 
 
-barnes_effect_dataset$site_code <- factor(barnes_effect_dataset$site_code, levels = c("CBRR", "BRNR","CHD", "BMD", "JWC","SLEP","PBR"))
+barnes_effect_dataset$site_code <- factor(barnes_effect_dataset$site_code, levels = c("CBRR","CHD", "BRNR", "BMD", "JWC","SLEP","PBR"))
 
 barnes_effect_dataset$dist <- factor(barnes_effect_dataset$dist, levels = c("87.814
 ", "86.049", "85.149", "84.049", "80.916","73.161","47.262"))

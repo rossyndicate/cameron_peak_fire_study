@@ -4,3 +4,7 @@
 .Ruserdata
 data/
 docs/
+output/
+CPL/
+test_fig/
+cpf_target/

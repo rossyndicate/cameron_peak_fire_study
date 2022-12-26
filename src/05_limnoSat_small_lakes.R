@@ -23,7 +23,7 @@ CO_data <- CO_data %>%
   mutate(date_new= as.Date(paste(date, sep=""), "%Y%m%d")) %>%
   unite("LandsatID", col1:date, sep= "_", 
         remove = TRUE) %>%
-  rename(nhdplusv2_comid=permanent,
+  rename(lake_nhdid=permanent,
          mystery_ID=col6,
          date=date_new)  %>%
   mutate(year=year(date)) %>%
@@ -32,14 +32,6 @@ CO_data <- CO_data %>%
 
 names(CO_data)
 str(CO_data)
-
-##SKIP TO HERE ONCE IT HAS BEEN PULLED FROM FOLDER##
-
-
-CO_data <- read.csv("data/compiled_limnosat_110122.csv") %>%
-  mutate(date = as.Date(date, format = "%Y-%m-%d"))
- 
-
 names(CO_data)
 str(CO_data)
 
@@ -57,40 +49,45 @@ length(unique(CO_data$year))
 hist(CO_data$dwl)
 #Why so green? Benthic periphyton in small, shallow lakes... agricultural ponds
 
-#attempt to join by comid
-#res_comid <- read.csv("data/res_comid.csv")%>%
- #  mutate(comid = as.character(comid))
+
+##SKIP TO HERE ONCE IT HAS BEEN PULLED FROM FOLDER##
 
 
-#%>%
- # mutate(comid = as.character(comid))
-
-#Peeking at study sites
-
-library(nhdplusTools)
-library(mapview)
-
-colorado <- get_huc8(id = '14010001')
-colorado_waterbodies <- get_waterbodies(AOI = colorado)
-mapview(colorado_waterbodies)
+CO_data <- read.csv("data/compiled_limnosat_110122.csv") %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))%>%
+  rename(lake_nhdid = nhdplusv2_comid)
+ 
 
 
-#pulling in CPF sites, comids grabbed earlier
 
-cpf_waterbodies <- read.csv("data/nhd_comids.csv")
+#join by nhd id from lagos dataset
+res_nhd <- read.csv("data/burned_water/lake_information.csv")%>%
+  filter(lake_county == "Larimer")%>%
+filter(lake_namegnis %in% c("Chambers Lake", "Barnes Meadow Reservoir", "Peterson Lake", "Long Draw Reservoir", "Joe Wright Reservoir", "Horsetooth Reservoir", "Halligan Reservoir", "Seaman Reservoir", "Comanche Reservoir", "Hourglass Reservoir"))
+
+#check that spelling of names worked
+unique(res_nhd$lake_namegnis)
+
+
+
+
 
 #filter dataset to our lakes and add real names
-cpf_lake_data <- CO_data%>%
- filter(nhdplusv2_comid %in% cpf_waterbodies$nhdplusv2_comid)%>%
-mutate(nhdplusv2_comid = as.integer(nhdplusv2_comid))%>%
-inner_join(., cpf_waterbodies, by= "nhdplusv2_comid")
+clp_major_lake_data <- CO_data%>%
+ filter(lake_nhdid %in% res_nhd$lake_nhdid)%>%
+inner_join(., res_nhd, by= "lake_nhdid")
+#check to make sure all lakes came through
+unique(cpf_lake_data$lake_namegnis)
 
-cpf_lakes_sum <- cpf_lakes_data%>%
-  group_by(nhdplusv2_comid, year)%>%
+cpf_lakes_sum <- cpf_lake_data%>%
+  group_by(lake_namegnis, year)%>%
   summarise(count = n())
   
 cpf_lake_data <- read.csv("data/cpf_lakes_limnosat.csv")%>%
   mutate(date = as.Date(date, format = "%Y-%m-%d"))
+
+
+
 #graph dominant wavelength
 colorsBS <- c("Barnes Meadow Reservoir" = "#E69F00", "Chambers Lake" = "#F0E442", "Peterson Lake" = "#D55E00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
 
@@ -117,4 +114,4 @@ dwl_cpf_boxplot <- filter(cpf_lake_data, year>2019) %>%
   xlab("Date")
 plot(dwl_cpf_boxplot)
 
-write_csv(cpf_lake_data, "data/cpf_lakes_limnosat.csv")
+write_csv(cpf_lake_data, "data/cpf_lagos_join_limnosat.csv")
