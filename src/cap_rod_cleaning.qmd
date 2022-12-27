@@ -1,0 +1,303 @@
+---
+title: "cap rod intake"
+format: html
+editor: visual
+---
+
+## Packages
+
+```{r setup}
+require("knitr")
+opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study/")
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(plotly)
+
+
+```
+
+## Correcting Functions
+
+DriftR package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder
+
+```{r}
+source("src/driftR_functions/dr_correctOne.R")
+source("src/driftR_functions/dr_correctTwo.R")
+source("src/driftR_functions/dr_drop.R")
+source("src/driftR_functions/dr_factor.R")
+source("src/driftR_functions/dr_read.R")
+source("src/driftR_functions/dr_readSonde.R")
+source("src/driftR_functions/dr_replace.R")
+source("src/driftR_functions/notInOperator.R")
+source("src/driftR_functions/parseTime.R")
+source("src/driftR_functions/sondeCal.R")
+source("src/driftR_functions/sondeClean.R")
+source("src/driftR_functions/sondeRaw.R")
+
+```
+
+## Importing and Combining
+
+RULES:
+
+1.  All data must be in CSVs nested in the folders data/all_sites/
+
+2.  All files must have naming convention: SITE\_#DATE#
+
+3.  All files must have same number of columns and column names
+
+4.  All files must have the same DateTime format (can be adjusted below)
+
+5.  Run all_data first to get what the pattern for gsub will be
+
+    1.  This is also a good way to test that none of your files are broken
+
+6.  Use plots to double check everything
+
+```{r}
+#function testing to create one df with all caprod data
+
+read_and_combine <- function(folder_path){
+  
+  # This ensures that version 2.0+ of the readr package (tidyverse) is being
+  # used, because it allows for reading multiple files
+  readr::local_edition(2) 
+  
+  # Read in all data files from all
+  all_data <- read_csv(
+    # Provide a vector/list of filenames to read
+    file = list.files(
+      path = folder_path,
+      # Search in all subfolders of `path` for csv files
+      recursive = TRUE,
+      # Use full filenames so R can find them
+      full.names = TRUE),
+    # Store the path to each csv in a "path" column
+    id = "path")
+  
+  # Now tidy up the dataset before returning it to the main workflow
+  cleaned_data <- all_data %>%
+    mutate(
+      # Create a new column with a shortened version of the path
+      site_code = gsub(pattern = "C:/Users/Sam Struthers/OneDrive - Colostate/Documents/Repositories/cameron_peak_fire_study/data//all_sites_caprod_data/",
+                     replacement = "",
+                     x = path),
+      # Extract just the folder name from this shortened version of the path
+      site_code = str_extract(string = site_code,
+      # Remove everything after the first bit of upper case text
+        pattern = "[A-Z]+"),
+      
+      DT =  as.POSIXct(datetime, format = "%m/%d/%Y %H:%M", tz = "MST")
+    )
+}
+
+## All sites combined into 1 dataframe
+# change "" to the file path were all_sites is located
+
+all_sites_combined <- read_and_combine("~/Repositories/cameron_peak_fire_study/data/caprods/data/site_data/all_sites")%>%
+  select(DT, site_code, wtrhgt__5)%>%
+  mutate(water_height_cm = wtrhgt__5 /10, 
+        time =  format(DT, format = "%H:%M"), 
+        site_code = str_extract(string = site_code, 
+                                      pattern = "[A-Z]+"))%>%
+  dplyr ::rename(water_height_mm = wtrhgt__5)
+
+
+
+
+```
+
+## 
+
+## Visual
+
+-   check for missing data, weird end dates etc
+
+```{r}
+master_visual <- all_sites_combined%>%
+  ggplot(aes(x= DT, y = water_height_cm, color = site_code))+
+  geom_line()
+plot(master_visual)
+
+indv_visual <- filter(all_sites_combined, site_code == "FISH")%>%
+  ggplot(aes(x= DT, y = water_height_cm, color = site_code))+
+  geom_point()
+plot(indv_visual)
+```
+
+## Export Masterfile
+
+```{r}
+write_csv(all_sites_combined, "data/all_sites_combined_UNCLEAN.csv")
+```
+
+## Remove negative values
+
+To remove negative values and data when the sensor was being cleaned
+
+```{r}
+
+removed_neg <- all_sites_combined%>%
+  filter(water_height_mm>=0)
+
+
+removed_and_unclean <- ggplot()+
+    geom_line(data = filter(all_sites_combined, site_code == "SHEP"), aes(x= DT, y= water_height_cm), color= "red")+
+  geom_line(data = filter(removed_neg, site_code == "SHEP"), aes(x= DT, y= water_height_cm), color= "black")
+ggplotly(removed_and_unclean)
+```
+
+## Computing daily averages
+
+```{r}
+
+daily_means <- read_csv("masterfiles/all_sites_caprod_masterfile_cleaned.csv")%>%
+  mutate(dayofyear = yday(datetime), 
+         Date = date(datetime), 
+         Site = site_code)%>%
+  group_by(dayofyear, Site, Date)%>%
+  mutate(mean_water_height_cm = mean(water_height_cm))%>%
+  ungroup()
+
+#Match up with FCW and ISCO Samples 
+
+site_labels <- c("FISH", "BEAV", "BENN", "SAWM", "PENN", "BLAK", "SHEP", "LBEA", "ROAR", "SAWM_ISCO", "FISH_ISCO", "LBEA_ISCO", 'BLAK_ISCO' )
+
+cam_pk_chem <- read.csv("data/cam_pk_master_110322.csv")%>%
+  filter(Era == "FCW" | Era == "ISCO")%>%
+  filter(SiteLabel %in% site_labels)%>%
+  mutate( grab_date  = as.Date(Date, format = "%d-%b-%y"), 
+          Year = year(grab_date), 
+          dayofyear = yday(grab_date))%>%
+  filter(Year >=2022)%>%
+  filter(SampleType %in% c("NORM", "ISCO"))%>%
+  select(grab_date, SiteLabel, Era, EraSamp, dayofyear, SampleType)%>%
+mutate(Site=ifelse(SiteLabel %in% c('FISH','FISH_ISCO'),"FISH",
+                   ifelse(SiteLabel %in% c('LBEA','LBEA_ISCO'),"LBEA",
+                   ifelse(SiteLabel %in% c('SAWM','SAWM_ISCO'),"SAWM",
+                   ifelse(SiteLabel %in% c('BLAK','BLAK_ISCO'),"BLAK",SiteLabel )))))
+
+
+
+sample_by_day <- cam_pk_chem%>%
+  group_by(Site, dayofyear, SampleType)%>%
+  summarise( count = n())%>%
+  ungroup()
+
+
+
+
+
+
+daily_means_w_samples <- daily_means%>%
+  #left_join( select(cam_pk_chem, c(Site, SiteLabel, dayofyear, grab_date,SampleType, Era )), by = "dayofyear")%>%
+  left_join( select(sample_by_day, c(Site, dayofyear, count,SampleType )), by = c("Site", "dayofyear") )
+
+
+
+sample_plot <- filter(daily_means_w_samples, Site == "FISH")%>%
+  ggplot()+
+  geom_line(aes(x= Date, y = mean_water_height_cm, group = Site, color = Site))+
+  geom_point(aes(x= Date, y = count, color = SampleType ))
+
+plot(sample_plot)
+
+#Write daily averages file matched up with sample #
+
+write_csv(select(daily_means_w_samples, c(Date, mean_water_height_cm, Site, SampleType, count)), "masterfiles/daily_mean_samples_masterfile_cleaned.csv")
+
+```
+
+## Field data adjustments:
+
+WORK IN PROGRESS
+
+Trying to adjust stage data based on field measurements
+
+-   initially tried to use driftR but that wasn't doing the adjustment I wanted
+
+-   Got a method that I liked visually but is less reproducible than I would like
+
+    -   Hoping to use that method in a function so that it can be worked into targets
+
+```{r}
+adjust_stage <- function(stage_dataframe,manual_values_df,site_name ){
+  
+  #pick out only that site
+  site_only <- filter(stage_dataframe, site_code == site_name)
+  manual_site_only <- filter(manual_values_df, site_code == site_name)
+  #for a given period of time, pick out the timeframe and adjust the values between field measurements
+  for (i in 1:length(manual_site_only$manual_stage_cm)) {
+    #for one section pick out the sensor data that corresponds
+    site_only_test <- filter(site_only,  between(DT, manual_site_only$datetime[i],manual_site_only$datetime[i+1] ))%>%
+      #create new adjustment values
+      #first is earlier adjustment
+  mutate(loop_num = i)
+  }
+ 
+  
+  
+  return(site_only_test)
+}
+
+# fish_new_values <- adjust_stage(all_sites_combined, manual_values_df = manual_values, site_name = "FISH")
+# 
+# first_adjustment = manual_site_only$manual_stage_cm[i]-head(water_height_cm, n=1), 
+#          #last is second site visit adjustment
+#          last_adjustment = manual_site_only$manual_stage_cm[i+1]-tail(water_height_cm, n=1), 
+#          #create an average adjustment based on a 2 point calibration
+#          overall_adjustment = (first_adjustment + last_adjustment )/2, 
+#          #add this adjustment to the sensor data
+#          adjusted_values = water_height_cm + overall_adjustment,
+#          date = as.character(as.Date(DT)))%>%
+
+ 
+
+#ADJUSTING USING driftR Functions, written in Correcting Functions
+
+#Pulling in manual values
+manual_values<- read.csv("data/Manual_stage_discharge.csv")%>%
+   mutate(datetime = as.POSIXct(DateTime, format = "%m/%d/%Y %H:%M", tz = "MST"),
+          time =  format(DateTime, format = "%H:%M"))%>% 
+    dplyr::rename(site_code = Site)
+
+#Testing workflow with one site data
+fish_non_adjusted <- filter(all_sites_combined, site_code == "FISH")
+fish_manual <- filter(manual_values, site_code == "FISH")
+
+
+
+fish_adjust_test <- filter(fish_non_adjusted,  between(DT, fish_manual$datetime[4],fish_manual$datetime[5] ))%>%
+  mutate(first_adjustment = fish_manual$manual_stage_cm[4]-head(water_height_cm, n=1), 
+         last_adjustment = fish_manual$manual_stage_cm[5]-tail(water_height_cm, n=1), 
+         overall_adjustment = (first_adjustment + last_adjustment )/2, 
+         adjusted_values = water_height_cm + overall_adjustment,
+         date = as.character(as.Date(DT)))%>%
+  #select(DT, water_height_cm,site_code, first_cm, last_cm, time, date)%>%
+  as_tibble()
+
+#TRYING TO WRITE ADJUSTMENT TEST
+fish_test_factor <- dr_factor(fish_adjust_test, corrFactor = corrFac, dateVar = date, timeVar = time, keepDateTime = TRUE )
+
+
+
+
+
+#Doing adjustment 
+
+fish_adjusted <- dr_correctTwo(fish_test_factor, sourceVar = water_height_cm, cleanVar = height_clean_cm, calValLow = 11.8, calValHigh = 31, calStdLow = 22, calStdHigh = 20.6, factorVar = corrFac )
+
+# waterTibble <- dr_correctTwo(waterTibble, sourceVar = pH, cleanVar = pH_corr, calValLow = 7.01,
+#                            calStdLow = 7, calValHigh = 11.8, calStdHigh = 10, factorVar = corfac)
+
+fish_non_adjusted_graph <- ggplot()+
+  geom_line(data = fish_non_adjusted, aes( x= DT , y= water_height_cm), color= "black")+
+  geom_line(data = fish_adjust_test, aes( x= DT , y= adjusted_values), color= "green", alpha = .5)+
+  geom_point(data = fish_manual, aes( x= datetime , y= manual_stage_cm), color = "blue")
+
+plot(fish_non_adjusted_graph)
+
+fish_manual$manual_stage_cm[4]
+fish_manual$manual_stage_cm[5]
+```
