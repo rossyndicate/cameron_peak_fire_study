@@ -39,7 +39,7 @@ All_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD"
 
 #Determning number of Samples....
 
-Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry-DESKTOP-K61OFQI.csv")%>%
+Reservoir_Chemistry <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
   mutate(Date = as.Date(Date),
          Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow")))%>% rename(Watershed = watershed)%>%
 filter( Watershed != "Comanche Reservoir" & Watershed != "Hourglass Reservoir"& Year>= "2021")
@@ -247,6 +247,8 @@ sc_boxplot <- nutrient_boxplot_swarm_graph('SC (uS/cm)')
 
 no3_boxplot_title <- nutrient_boxplot_swarm_graph_title('NO3 (mg/L)')
 sc_boxplot_title <- nutrient_boxplot_swarm_graph_title('SC (uS/cm)')
+
+
 
 
 #boxplot fig 1
