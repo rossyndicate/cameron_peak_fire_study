@@ -57,8 +57,7 @@ RULES:
 
 ```{r}
 #function testing to create one df with all caprod data
-
-read_and_combine <- function(folder_path){
+read_and_combine <- function(folder_path, full_folder_path){
   
   # This ensures that version 2.0+ of the readr package (tidyverse) is being
   # used, because it allows for reading multiple files
@@ -80,7 +79,7 @@ read_and_combine <- function(folder_path){
   cleaned_data <- all_data %>%
     mutate(
       # Create a new column with a shortened version of the path
-      site_code = gsub(pattern = "C:/Users/Sam Struthers/OneDrive - Colostate/Documents/Repositories/cameron_peak_fire_study/data//all_sites_caprod_data/",
+      site_code = gsub(pattern = full_folder_path,
                      replacement = "",
                      x = path),
       # Extract just the folder name from this shortened version of the path
@@ -95,16 +94,14 @@ read_and_combine <- function(folder_path){
 ## All sites combined into 1 dataframe
 # change "" to the file path were all_sites is located
 
-all_sites_combined <- read_and_combine("~/Repositories/cameron_peak_fire_study/data/caprods/data/site_data/all_sites")%>%
+stage_dataframe <- read_and_combine(folder_path = "~/Repositories/cameron_peak_fire_study/data/all_sites_caprod_data",
+                                    full_folder_path = "C:/Users/Sam Struthers/OneDrive - Colostate/Documents/Repositories/cameron_peak_fire_study/data/all_sites_caprod_data/")%>%
   select(DT, site_code, wtrhgt__5)%>%
   mutate(water_height_cm = wtrhgt__5 /10, 
         time =  format(DT, format = "%H:%M"), 
         site_code = str_extract(string = site_code, 
                                       pattern = "[A-Z]+"))%>%
   dplyr ::rename(water_height_mm = wtrhgt__5)
-
-
-
 
 ```
 
@@ -222,35 +219,11 @@ Trying to adjust stage data based on field measurements
     -   Hoping to use that method in a function so that it can be worked into targets
 
 ```{r}
-adjust_stage <- function(stage_dataframe,manual_values_df,site_name ){
-  
-  #pick out only that site
-  site_only <- filter(stage_dataframe, site_code == site_name)
-  manual_site_only <- filter(manual_values_df, site_code == site_name)
-  #for a given period of time, pick out the timeframe and adjust the values between field measurements
-  for (i in 1:length(manual_site_only$manual_stage_cm)) {
-    #for one section pick out the sensor data that corresponds
-    site_only_test <- filter(site_only,  between(DT, manual_site_only$datetime[i],manual_site_only$datetime[i+1] ))%>%
-      #create new adjustment values
-      #first is earlier adjustment
-  mutate(loop_num = i)
-  }
- 
-  
-  
-  return(site_only_test)
-}
 
-# fish_new_values <- adjust_stage(all_sites_combined, manual_values_df = manual_values, site_name = "FISH")
-# 
-# first_adjustment = manual_site_only$manual_stage_cm[i]-head(water_height_cm, n=1), 
-#          #last is second site visit adjustment
-#          last_adjustment = manual_site_only$manual_stage_cm[i+1]-tail(water_height_cm, n=1), 
-#          #create an average adjustment based on a 2 point calibration
-#          overall_adjustment = (first_adjustment + last_adjustment )/2, 
-#          #add this adjustment to the sensor data
-#          adjusted_values = water_height_cm + overall_adjustment,
-#          date = as.character(as.Date(DT)))%>%
+
+
+
+
 
  
 
@@ -263,25 +236,17 @@ manual_values<- read.csv("data/Manual_stage_discharge.csv")%>%
     dplyr::rename(site_code = Site)
 
 #Testing workflow with one site data
-fish_non_adjusted <- filter(all_sites_combined, site_code == "FISH")
-fish_manual <- filter(manual_values, site_code == "FISH")
 
+fish_manual <- read.csv("data/manual_values_dec_2022.csv")%>%
+      mutate(first_measurement_DT = as.POSIXct(first_measurement_DT, format = "%m/%d/%Y %H:%M", tz = "MST"), 
+             last_measurement_DT = as.POSIXct(last_measurement_DT, format = "%m/%d/%Y %H:%M", tz = "MST"))
 
-
-fish_adjust_test <- filter(fish_non_adjusted,  between(DT, fish_manual$datetime[4],fish_manual$datetime[5] ))%>%
-  mutate(first_adjustment = fish_manual$manual_stage_cm[4]-head(water_height_cm, n=1), 
-         last_adjustment = fish_manual$manual_stage_cm[5]-tail(water_height_cm, n=1), 
-         overall_adjustment = (first_adjustment + last_adjustment )/2, 
-         adjusted_values = water_height_cm + overall_adjustment,
-         date = as.character(as.Date(DT)))%>%
-  #select(DT, water_height_cm,site_code, first_cm, last_cm, time, date)%>%
-  as_tibble()
 
 #TRYING TO WRITE ADJUSTMENT TEST
 fish_test_factor <- dr_factor(fish_adjust_test, corrFactor = corrFac, dateVar = date, timeVar = time, keepDateTime = TRUE )
 
 
-
+dr_correctOne()
 
 
 #Doing adjustment 
@@ -291,13 +256,72 @@ fish_adjusted <- dr_correctTwo(fish_test_factor, sourceVar = water_height_cm, cl
 # waterTibble <- dr_correctTwo(waterTibble, sourceVar = pH, cleanVar = pH_corr, calValLow = 7.01,
 #                            calStdLow = 7, calValHigh = 11.8, calStdHigh = 10, factorVar = corfac)
 
-fish_non_adjusted_graph <- ggplot()+
-  geom_line(data = fish_non_adjusted, aes( x= DT , y= water_height_cm), color= "black")+
-  geom_line(data = fish_adjust_test, aes( x= DT , y= adjusted_values), color= "green", alpha = .5)+
-  geom_point(data = fish_manual, aes( x= datetime , y= manual_stage_cm), color = "blue")
+
+
+
+
+
+
+#corrected stage height <- get rid of error data, known zeros -> NA
+
+#adjusted _stage <- adjust entire dataset by X cm based on an average of measured vs sensor
+#drift_corrected stage <- apply driftR 
+
+#map (start date, end date, measured manual height, )
+
+#interpolated data?
+
+
+
+  
+FISH_stage_adjusted <- pmap_dfr(list(fish_manual$first_measurement_DT, 
+            fish_manual$last_measurement_DT,
+            fish_manual$first_measurement_cm,
+            fish_manual$last_measurement_cm),
+       adjust_stage, 
+       stage_df= stage_dataframe,
+          site_name = "FISH",
+          start_date = fish_manual$first_measurement_DT, 
+          end_date = fish_manual$last_measurement_DT, 
+          manual_start = fish_manual$first_measurement_cm)
+
+ #MAP IN THIS ORDER
+ dr_factor()
+ 
+ #dr_drop if correct one does like NAs
+ 
+   
+   
+  dr_correctOne()
+  
+  
+##Function to adjust stage values to match start measurement  
+  
+  
+  adjust_stage <- function(stage_df,site_name,start_date, end_date, manual_start){
+    stage_df_new<- stage_df%>%
+     dplyr::filter(stage_df$site_code %in% site_name)%>%
+     dplyr::filter(between(DT, start_date, end_date))%>%
+      mutate(adjustment = manual_start - mean(head(water_height_cm, n = 4), na.rm = TRUE) , 
+             adjusted_stage = water_height_cm + adjustment)
+    
+    return(stage_df_new)
+    
+   
+  }
+  
+  
+ fish_fun_adjustment <- adjust_stage(stage_df = stage_dataframe,
+                                      site_name = "FISH",
+                                      start_date = fish_manual$first_measurement_DT[4],
+                                      end_date = fish_manual$last_measurement_DT[4], manual_start = fish_manual$first_measurement_cm[4])
+ 
+  
+  fish_non_adjusted_graph <- ggplot()+
+  geom_line(data = fish_fun_adjustment, aes( x= DT , y= water_height_cm), color= "black")+
+  geom_line(data = fish_fun_adjustment, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
+  geom_point(data = fish_manual, aes( x= first_measurement_DT , y= first_measurement_cm), color = "blue")
 
 plot(fish_non_adjusted_graph)
-
-fish_manual$manual_stage_cm[4]
-fish_manual$manual_stage_cm[5]
+  
 ```
