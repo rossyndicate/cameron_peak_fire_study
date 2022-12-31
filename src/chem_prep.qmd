@@ -253,6 +253,10 @@ unique_chla <- reservoir_chemistry%>%
 ## Playing with FCGOV DATA
 
 ```{r}
+
+#Fcgov sites in our study
+fcgov_study <- c("CHD", "BMD","JWC", "PJW", "PBR", "SFM", "PSF", "PNF", "PBD")
+
 #importing 
 fcgov_mainstem <- read.csv("data/UCLP_CWQMP_database_CSU.csv", na.strings = '*')%>%
   mutate(#Date = as_date(Date, format = "%m/%d/%Y"),
@@ -266,10 +270,10 @@ fcgov_mainstem <- read.csv("data/UCLP_CWQMP_database_CSU.csv", na.strings = '*')
         PO4 = oPhos, 
         Mg = Mg_S, 
         Ca = Ca_S)%>%
-  filter(site_code %in% Mainstem_sites)%>%
-  mutate(dayofyear = yday(Date), 
+  mutate(status = ifelse(site_code %in% fcgov_study, "Burned", "Unburned"),
+         dayofyear = yday(Date), 
          collector = "City of Fort Collins")%>%
-  select(site_code,Year, Date ,Turbidity, pH, SC, Na, K, Mg, Ca, Cl, NO3, PO4, SO4, DO, Temp,collector )
+  select(site_code,Year, Date ,Turbidity, pH, SC, Na, K, Mg, Ca, Cl, NO3, PO4, SO4, DO, Temp,collector, status )
 
 
 #combining with RMRS data
@@ -286,14 +290,15 @@ combined_graph <- filter(combined_mainstem, site_code %in% c("PBR"))%>%
   geom_point(aes(x = dayofyear, y = NO3, color = Year, shape = collector), alpha = .5)+
   geom_line(aes(x = dayofyear, y = NO3, group = Year,  color = Year))+
   scale_shape_manual(values =  c(15, 24))+
-  theme_bw()
+  theme_bw()+
+   scale_color_viridis_c()
 
 plot(combined_graph)
 
 
 combined_boxplot_no3 <- filter(combined_mainstem, site_code %in%c("PBR" ,"PJW", "JWC","PBD"))%>%
   ggplot()+
-  geom_boxplot(aes(x = site_code, y = NO3, middle = mean(NO3), group = site_code, fill = site_code))+
+  geom_dotplot(aes(x = site_code, y = NO3, group = site_code, fill = site_code))+
   theme_bw(base_size = 20)+
   facet_wrap(~fire+collector)
 plot(combined_boxplot_no3)
