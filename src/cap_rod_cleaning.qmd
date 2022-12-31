@@ -271,19 +271,67 @@ fish_adjusted <- dr_correctTwo(fish_test_factor, sourceVar = water_height_cm, cl
 
 #interpolated data?
 
-
-
-  
-FISH_stage_adjusted <- pmap_dfr(list(fish_manual$first_measurement_DT, 
+fish_manual_values_list <- list(fish_manual$first_measurement_DT, 
             fish_manual$last_measurement_DT,
             fish_manual$first_measurement_cm,
-            fish_manual$last_measurement_cm),
+            fish_manual$last_measurement_cm, 
+            stage_dataframe, 
+           fish_manual$site_code)
+  
+FISH_stage_adjusted <- pmap_dfr(fish_manual_values_list,
        adjust_stage, 
        stage_df= stage_dataframe,
-          site_name = "FISH",
+          site_name = fish_manual$site_code,
           start_date = fish_manual$first_measurement_DT, 
           end_date = fish_manual$last_measurement_DT, 
-          manual_start = fish_manual$first_measurement_cm)
+          manual_start = fish_manual$first_measurement_cm, .id = NULL)
+
+
+
+#for loop to make sure the functions are working
+#will be converted to map functions for ease of use
+
+##STEP ADJUSTMENT ON FIRST VALUE
+fish_stepped = data.frame()
+
+for(i in 1:length(fish_manual$first_measurement_DT)){
+  fish_fun_adj <- adjust_stage(stage_df = stage_dataframe,
+                                      site_name = "FISH",
+                                      start_date = fish_manual$first_measurement_DT[i],
+                                      end_date = fish_manual$last_measurement_DT[i], manual_start = fish_manual$first_measurement_cm[i])
+  fish_stepped <- rbind(fish_stepped, fish_fun_adj)
+  
+}
+
+## DF FACTOR ADJUSTMENT
+fish_factor <- data.frame()
+
+for(i in 1:length(fish_manual$last_measurement_DT)){
+  fish_fun_fac <- dr_factor_subset(stepped_df = fish_stepped,
+                                      site_name = "FISH",
+                                      start_date = fish_manual$first_measurement_DT[i],
+                                      end_date = fish_manual$last_measurement_DT[i])
+
+                           
+  fish_factor <- rbind(fish_factor, fish_fun_fac)
+  
+}
+
+##DRIFT CORRECTION
+
+fish_final <- data.frame()
+for(i in 1:length(fish_manual$last_measurement_DT)){
+  fish_fun_corr <- dr_correctOne_subset(factor_df = fish_factor,
+                                      site_name = "FISH",
+                                      start_date = fish_manual$first_measurement_DT[i],
+                                      end_date = fish_manual$last_measurement_DT[i], 
+                                      manual_end = fish_manual$last_measurement_cm[i])
+
+                           
+  fish_final <- rbind(fish_final, fish_fun_corr)
+  
+}
+
 
  #MAP IN THIS ORDER
  dr_factor()
@@ -310,16 +358,41 @@ FISH_stage_adjusted <- pmap_dfr(list(fish_manual$first_measurement_DT,
    
   }
   
+##Function to give dataset a time correction factor for each subset
+    dr_factor_subset <- function(stepped_df,site_name, start_date, end_date){
+      
+    factor_df <-stepped_df%>%
+     dplyr::filter(stepped_df$site_code %in% site_name)%>%
+     dplyr::filter(between(DT, start_date, end_date))%>%
+      mutate(time =  format(DT, format = "%H:%M"), 
+             date = as.Date(DT),
+             last_sensor_cm = mean(tail(adjusted_stage, n = 4),na.rm = TRUE))%>%
+      dr_factor(., corrFactor = corrFac, dateVar = date, timeVar = time, keepDateTime = TRUE )
+    
+    
+      return(factor_df)
+    }
+    
+##Function to correct drift over a subset by looking at measured values and the previous 4
+## dataframe must already have corrFac added or it will not run
+    
+    dr_correctOne_subset <- function(factor_df,site_name, start_date, end_date, manual_end){
+      
+    corrected_df <-factor_df%>%
+     dplyr::filter(factor_df$site_code %in% site_name)%>%
+     dplyr::filter(between(DT, start_date, end_date))%>%
+      dr_correctOne(sourceVar = adjusted_stage, cleanVar = corrected_stage_cm ,calVal = last_sensor_cm , calStd = manual_end , factorVar = corrFac)
+    
+      return(corrected_df)
+  }
   
- fish_fun_adjustment <- adjust_stage(stage_df = stage_dataframe,
-                                      site_name = "FISH",
-                                      start_date = fish_manual$first_measurement_DT[4],
-                                      end_date = fish_manual$last_measurement_DT[4], manual_start = fish_manual$first_measurement_cm[4])
+  
+ 
  
   
   fish_non_adjusted_graph <- ggplot()+
-  geom_line(data = fish_fun_adjustment, aes( x= DT , y= water_height_cm), color= "black")+
-  geom_line(data = fish_fun_adjustment, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
+  geom_line(data = fish_final, aes( x= DT , y= water_height_cm), color= "black")+
+  geom_line(data = fish_final, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
   geom_point(data = fish_manual, aes( x= first_measurement_DT , y= first_measurement_cm), color = "blue")
 
 plot(fish_non_adjusted_graph)
