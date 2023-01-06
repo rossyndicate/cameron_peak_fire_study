@@ -60,6 +60,8 @@ res_only_data <- Reservoir_Chemistry%>%
 filter(Location=="Reservoir")%>%
   pivot_longer(cols = c(ChlA, Turbidity, TSS, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3),names_to = "param", values_to = "value")%>%
   mutate(label = case_when(param == "ChlA" ~ 'Chl-a (mg/L)',
+                           param == "DOC" ~ 'DOC (mg/L)', 
+                           param == "DTN" ~ 'DTN (mg/L)',
                            param == "pH"~ 'pH',
                            param == 'TSS'~ 'TSS',
                            param == 'Turbidity'~ 'Turbidity (NTU)',
@@ -230,7 +232,8 @@ nutrient_boxplot_swarm_graph_title = function(nutrient){
 no3_boxplot <-nutrient_boxplot_swarm_graph( 'NO3 (mg/L)')
 
 
-plot(no3_boxplot)
+dtn_boxplot <-nutrient_boxplot_swarm_graph ('DTN (mg/L)')
+doc_boxplot <-nutrient_boxplot_swarm_graph ('DOC (mg/L)')
 po4_boxplot <-nutrient_boxplot_swarm_graph( 'PO4 (mg/L)')
 so4_boxplot <-nutrient_boxplot_swarm_graph( 'SO4 (mg/L)')
 chla_boxplot <-nutrient_boxplot_swarm_graph( 'Chl-a (mg/L)')

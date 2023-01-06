@@ -96,7 +96,7 @@ all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD"
 ```{r}
 
 
-reservoir_chemistry <- read_csv('data/ReservoirChemistry_120522.csv')%>%
+reservoir_chemistry <- read_csv('data/ReservoirChemistry_010523.csv')%>%
   mutate(Date=as.Date(Date,format="%d-%b-%y"))%>%
   filter(SampleType == "NORM") %>%
   mutate (FCW_Number = as.numeric(gsub('FCW ', '', IDNo)), 
@@ -287,21 +287,27 @@ combined_mainstem <- filter(reservoir_chemistry, Location == "Mainstem")%>%
 #graphing yearly changes in nutrients pre/post fire
 combined_graph <- filter(combined_mainstem, site_code %in% c("PBR"))%>%
   ggplot()+
-  geom_point(aes(x = dayofyear, y = NO3, color = Year, shape = collector), alpha = .5)+
-  geom_line(aes(x = dayofyear, y = NO3, group = Year,  color = Year))+
-  scale_shape_manual(values =  c(15, 24))+
+  geom_point(aes(x = dayofyear, y = NO3, color = Year, shape = collector),size = 3, alpha = .5)+
+  geom_line(aes(x = dayofyear, y = NO3, group = Year,  color = Year), size = 1)+
+  scale_shape_manual(values =  c(15, 17))+
   theme_bw()+
    scale_color_viridis_c()
 
 plot(combined_graph)
 
+ggsave("output/mainstem_timeline_no3_2008_2022_FCGOV_RMRS.jpg", width = 12, height = 9, dpi = 300, units = "in" )
 
 combined_boxplot_no3 <- filter(combined_mainstem, site_code %in%c("PBR" ,"PJW", "JWC","PBD"))%>%
-  ggplot()+
-  geom_dotplot(aes(x = site_code, y = NO3, group = site_code, fill = site_code))+
+  ggplot(aes(x= site_code , y=NO3, fill =site_code )) + 
+geom_boxplot()+
+   geom_dotplot( stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .05, dotsize = 1, alpha = .7)+
+  stat_summary(fun.y = median, fun.ymin = median, fun.ymax = median,
+                 geom = "crossbar", width = .75)+
   theme_bw(base_size = 20)+
   facet_wrap(~fire+collector)
 plot(combined_boxplot_no3)
+
+ggsave("output/mainstem_boxplot_no3_2008_2022_FCGOV_RMRS.jpg", width = 14, height = 9, dpi = 300, units = "in" )
 
 combined_boxplot_K <- filter(combined_mainstem, site_code %in%c("PBR" ,"PJW", "JWC","PBD"))%>%
   ggplot()+

@@ -55,6 +55,8 @@ RULES:
 
 6.  Use plots to double check everything
 
+    1.  Use the plots to double check there are no zeros near site visits. If there are, remove them from the dataset manually! This will help the adjustments run correctly.
+
 ```{r}
 #function testing to create one df with all caprod data
 read_and_combine <- function(folder_path, full_folder_path){
@@ -94,7 +96,7 @@ read_and_combine <- function(folder_path, full_folder_path){
 ## All sites combined into 1 dataframe
 # change "" to the file path were all_sites is located
 
-stage_dataframe <- read_and_combine(folder_path = "~/Repositories/cameron_peak_fire_study/data/all_sites_caprod_data",
+stage_df <- read_and_combine(folder_path = "~/Repositories/cameron_peak_fire_study/data/all_sites_caprod_data",
                                     full_folder_path = "C:/Users/Sam Struthers/OneDrive - Colostate/Documents/Repositories/cameron_peak_fire_study/data/all_sites_caprod_data/")%>%
   select(DT, site_code, wtrhgt__5)%>%
   mutate(water_height_cm = wtrhgt__5 /10, 
@@ -103,250 +105,54 @@ stage_dataframe <- read_and_combine(folder_path = "~/Repositories/cameron_peak_f
                                       pattern = "[A-Z]+"))%>%
   dplyr ::rename(water_height_mm = wtrhgt__5)
 
-```
 
-## 
+
+#Pull in field measured values
+
+manual_measurements <- read.csv("data/manual_values_dec_2022.csv")%>%
+      mutate(first_measurement_DT = as.POSIXct(first_measurement_DT, format = "%m/%d/%Y %H:%M", tz = "MST"), 
+             last_measurement_DT = as.POSIXct(last_measurement_DT, format = "%m/%d/%Y %H:%M", tz = "MST"))
+
+```
 
 ## Visual
 
--   check for missing data, weird end dates etc
+-   check for missing data, weird end dates, remove any 0s near
 
 ```{r}
-master_visual <- all_sites_combined%>%
+master_visual <- stage_df%>%
   ggplot(aes(x= DT, y = water_height_cm, color = site_code))+
   geom_line()
 plot(master_visual)
 
-indv_visual <- filter(all_sites_combined, site_code == "FISH")%>%
+indv_visual <- filter(stage_df, site_code == "SAWM")%>%
   ggplot(aes(x= DT, y = water_height_cm, color = site_code))+
-  geom_point()
+  geom_line()
 plot(indv_visual)
 ```
 
 ## Export Masterfile
 
 ```{r}
-write_csv(all_sites_combined, "data/all_sites_combined_UNCLEAN.csv")
+write_csv(stage_df, "data/all_sites_combined_UNCLEAN.csv")
 ```
 
-## Remove negative values
+# Field data adjustments:
 
-To remove negative values and data when the sensor was being cleaned
+In broad strokes, these functions/loops will take the sensor data pulled in above and manual values measured in the field to attempt to correct sensor data to match up field data. Workflow overview:
 
-```{r}
+1.  Subset sensor df by a first and second field measurement.
+2.  Step sensor up or down based on the difference between first field measurement and recorded values.
+3.  Create a time factor for each subset of data which will allow for the driftR package to correct for sensor drift
+4.  Use driftR functions to match up end of dataset with second field measurement.
 
-removed_neg <- all_sites_combined%>%
-  filter(water_height_mm>=0)
-
-
-removed_and_unclean <- ggplot()+
-    geom_line(data = filter(all_sites_combined, site_code == "SHEP"), aes(x= DT, y= water_height_cm), color= "red")+
-  geom_line(data = filter(removed_neg, site_code == "SHEP"), aes(x= DT, y= water_height_cm), color= "black")
-ggplotly(removed_and_unclean)
-```
-
-## Computing daily averages
+##Functions to subset and adjust stage values
 
 ```{r}
-
-daily_means <- read_csv("masterfiles/all_sites_caprod_masterfile_cleaned.csv")%>%
-  mutate(dayofyear = yday(datetime), 
-         Date = date(datetime), 
-         Site = site_code)%>%
-  group_by(dayofyear, Site, Date)%>%
-  mutate(mean_water_height_cm = mean(water_height_cm))%>%
-  ungroup()
-
-#Match up with FCW and ISCO Samples 
-
-site_labels <- c("FISH", "BEAV", "BENN", "SAWM", "PENN", "BLAK", "SHEP", "LBEA", "ROAR", "SAWM_ISCO", "FISH_ISCO", "LBEA_ISCO", 'BLAK_ISCO' )
-
-cam_pk_chem <- read.csv("data/cam_pk_master_110322.csv")%>%
-  filter(Era == "FCW" | Era == "ISCO")%>%
-  filter(SiteLabel %in% site_labels)%>%
-  mutate( grab_date  = as.Date(Date, format = "%d-%b-%y"), 
-          Year = year(grab_date), 
-          dayofyear = yday(grab_date))%>%
-  filter(Year >=2022)%>%
-  filter(SampleType %in% c("NORM", "ISCO"))%>%
-  select(grab_date, SiteLabel, Era, EraSamp, dayofyear, SampleType)%>%
-mutate(Site=ifelse(SiteLabel %in% c('FISH','FISH_ISCO'),"FISH",
-                   ifelse(SiteLabel %in% c('LBEA','LBEA_ISCO'),"LBEA",
-                   ifelse(SiteLabel %in% c('SAWM','SAWM_ISCO'),"SAWM",
-                   ifelse(SiteLabel %in% c('BLAK','BLAK_ISCO'),"BLAK",SiteLabel )))))
-
-
-
-sample_by_day <- cam_pk_chem%>%
-  group_by(Site, dayofyear, SampleType)%>%
-  summarise( count = n())%>%
-  ungroup()
-
-
-
-
-
-
-daily_means_w_samples <- daily_means%>%
-  #left_join( select(cam_pk_chem, c(Site, SiteLabel, dayofyear, grab_date,SampleType, Era )), by = "dayofyear")%>%
-  left_join( select(sample_by_day, c(Site, dayofyear, count,SampleType )), by = c("Site", "dayofyear") )
-
-
-
-sample_plot <- filter(daily_means_w_samples, Site == "FISH")%>%
-  ggplot()+
-  geom_line(aes(x= Date, y = mean_water_height_cm, group = Site, color = Site))+
-  geom_point(aes(x= Date, y = count, color = SampleType ))
-
-plot(sample_plot)
-
-#Write daily averages file matched up with sample #
-
-write_csv(select(daily_means_w_samples, c(Date, mean_water_height_cm, Site, SampleType, count)), "masterfiles/daily_mean_samples_masterfile_cleaned.csv")
-
-```
-
-## Field data adjustments:
-
-WORK IN PROGRESS
-
-Trying to adjust stage data based on field measurements
-
--   initially tried to use driftR but that wasn't doing the adjustment I wanted
-
--   Got a method that I liked visually but is less reproducible than I would like
-
-    -   Hoping to use that method in a function so that it can be worked into targets
-
-```{r}
-
-
-
-
-
-
- 
-
-#ADJUSTING USING driftR Functions, written in Correcting Functions
-
-#Pulling in manual values
-manual_values<- read.csv("data/Manual_stage_discharge.csv")%>%
-   mutate(datetime = as.POSIXct(DateTime, format = "%m/%d/%Y %H:%M", tz = "MST"),
-          time =  format(DateTime, format = "%H:%M"))%>% 
-    dplyr::rename(site_code = Site)
-
-#Testing workflow with one site data
-
-fish_manual <- read.csv("data/manual_values_dec_2022.csv")%>%
-      mutate(first_measurement_DT = as.POSIXct(first_measurement_DT, format = "%m/%d/%Y %H:%M", tz = "MST"), 
-             last_measurement_DT = as.POSIXct(last_measurement_DT, format = "%m/%d/%Y %H:%M", tz = "MST"))
-
-
-#TRYING TO WRITE ADJUSTMENT TEST
-fish_test_factor <- dr_factor(fish_adjust_test, corrFactor = corrFac, dateVar = date, timeVar = time, keepDateTime = TRUE )
-
-
-dr_correctOne()
-
-
-#Doing adjustment 
-
-fish_adjusted <- dr_correctTwo(fish_test_factor, sourceVar = water_height_cm, cleanVar = height_clean_cm, calValLow = 11.8, calValHigh = 31, calStdLow = 22, calStdHigh = 20.6, factorVar = corrFac )
-
-# waterTibble <- dr_correctTwo(waterTibble, sourceVar = pH, cleanVar = pH_corr, calValLow = 7.01,
-#                            calStdLow = 7, calValHigh = 11.8, calStdHigh = 10, factorVar = corfac)
-
-
-
-
-
-
-
-#corrected stage height <- get rid of error data, known zeros -> NA
-
-#adjusted _stage <- adjust entire dataset by X cm based on an average of measured vs sensor
-#drift_corrected stage <- apply driftR 
-
-#map (start date, end date, measured manual height, )
-
-#interpolated data?
-
-fish_manual_values_list <- list(fish_manual$first_measurement_DT, 
-            fish_manual$last_measurement_DT,
-            fish_manual$first_measurement_cm,
-            fish_manual$last_measurement_cm, 
-            stage_dataframe, 
-           fish_manual$site_code)
-  
-FISH_stage_adjusted <- pmap_dfr(fish_manual_values_list,
-       adjust_stage, 
-       stage_df= stage_dataframe,
-          site_name = fish_manual$site_code,
-          start_date = fish_manual$first_measurement_DT, 
-          end_date = fish_manual$last_measurement_DT, 
-          manual_start = fish_manual$first_measurement_cm, .id = NULL)
-
-
-
-#for loop to make sure the functions are working
-#will be converted to map functions for ease of use
-
-##STEP ADJUSTMENT ON FIRST VALUE
-fish_stepped = data.frame()
-
-for(i in 1:length(fish_manual$first_measurement_DT)){
-  fish_fun_adj <- adjust_stage(stage_df = stage_dataframe,
-                                      site_name = "FISH",
-                                      start_date = fish_manual$first_measurement_DT[i],
-                                      end_date = fish_manual$last_measurement_DT[i], manual_start = fish_manual$first_measurement_cm[i])
-  fish_stepped <- rbind(fish_stepped, fish_fun_adj)
-  
-}
-
-## DF FACTOR ADJUSTMENT
-fish_factor <- data.frame()
-
-for(i in 1:length(fish_manual$last_measurement_DT)){
-  fish_fun_fac <- dr_factor_subset(stepped_df = fish_stepped,
-                                      site_name = "FISH",
-                                      start_date = fish_manual$first_measurement_DT[i],
-                                      end_date = fish_manual$last_measurement_DT[i])
-
-                           
-  fish_factor <- rbind(fish_factor, fish_fun_fac)
-  
-}
-
-##DRIFT CORRECTION
-
-fish_final <- data.frame()
-for(i in 1:length(fish_manual$last_measurement_DT)){
-  fish_fun_corr <- dr_correctOne_subset(factor_df = fish_factor,
-                                      site_name = "FISH",
-                                      start_date = fish_manual$first_measurement_DT[i],
-                                      end_date = fish_manual$last_measurement_DT[i], 
-                                      manual_end = fish_manual$last_measurement_cm[i])
-
-                           
-  fish_final <- rbind(fish_final, fish_fun_corr)
-  
-}
-
-
- #MAP IN THIS ORDER
- dr_factor()
- 
- #dr_drop if correct one does like NAs
- 
-   
-   
-  dr_correctOne()
+##Function to adjust sensor stage values to match start measurement  
   
   
-##Function to adjust stage values to match start measurement  
-  
-  
-  adjust_stage <- function(stage_df,site_name,start_date, end_date, manual_start){
+  adjust_stage <- function(site_name,start_date, end_date, manual_start, manual_end){
     stage_df_new<- stage_df%>%
      dplyr::filter(stage_df$site_code %in% site_name)%>%
      dplyr::filter(between(DT, start_date, end_date))%>%
@@ -359,42 +165,231 @@ for(i in 1:length(fish_manual$last_measurement_DT)){
   }
   
 ##Function to give dataset a time correction factor for each subset
-    dr_factor_subset <- function(stepped_df,site_name, start_date, end_date){
+    dr_factor_subset <- function(site_name, start_date, end_date, manual_start, manual_end){
       
     factor_df <-stepped_df%>%
      dplyr::filter(stepped_df$site_code %in% site_name)%>%
      dplyr::filter(between(DT, start_date, end_date))%>%
       mutate(time =  format(DT, format = "%H:%M"), 
-             date = as.Date(DT),
-             last_sensor_cm = mean(tail(adjusted_stage, n = 4),na.rm = TRUE))%>%
+             date = as.Date(DT, format = "%Y-%m-%d"))%>%
+      arrange(DT)%>%
       dr_factor(., corrFactor = corrFac, dateVar = date, timeVar = time, keepDateTime = TRUE )
     
     
       return(factor_df)
     }
     
+    
+    blak_factor <- filter(factor_df, site_code == "BLAK")
 ##Function to correct drift over a subset by looking at measured values and the previous 4
 ## dataframe must already have corrFac added or it will not run
     
-    dr_correctOne_subset <- function(factor_df,site_name, start_date, end_date, manual_end){
+    dr_correctOne_subset <- function(site_name, start_date, end_date, manual_end, manual_start){
       
     corrected_df <-factor_df%>%
      dplyr::filter(factor_df$site_code %in% site_name)%>%
-     dplyr::filter(between(DT, start_date, end_date))%>%
-      dr_correctOne(sourceVar = adjusted_stage, cleanVar = corrected_stage_cm ,calVal = last_sensor_cm , calStd = manual_end , factorVar = corrFac)
+     dplyr::filter(between(DT, start_date, end_date))
     
-      return(corrected_df)
+    last_sensor_cm = mean(tail(corrected_df$adjusted_stage, n = 4),na.rm = TRUE)
+    
+     drift_corrected_df<- dr_correctOne(corrected_df, sourceVar = adjusted_stage, cleanVar = corrected_stage_cm ,calVal = last_sensor_cm , calStd = manual_end , factorVar = corrFac)
+    
+      return(drift_corrected_df)
   }
   
-  
- 
- 
-  
-  fish_non_adjusted_graph <- ggplot()+
-  geom_line(data = fish_final, aes( x= DT , y= water_height_cm), color= "black")+
-  geom_line(data = fish_final, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
-  geom_point(data = fish_manual, aes( x= first_measurement_DT , y= first_measurement_cm), color = "blue")
 
-plot(fish_non_adjusted_graph)
+
+ 
+
+
+
+```
+
+## Preforming the adjustments
+
+Using the functions written above and pmap, we can map over the manual measurements df and preform the adjustments.
+
+```{r}
+
+
+
+
+
+
+#Fit column names to match argument names in functions
+
+manual_measurements_for_func <- manual_measurements%>%
+  select(site_name = site_code ,start_date = first_measurement_DT, end_date = last_measurement_DT, manual_start = first_measurement_cm, manual_end = last_measurement_cm)%>%
+  na.omit()%>%
+  as_tibble()
+
+
+
+
+
+##PMAP FOR ADJUSTMENT FUNCTIONS!
+
+#Steps df for each subset between site visits to match the first measurement (start measurement)
+stepped_df <- pmap_dfr(manual_measurements_for_func, adjust_stage)
+
+# creates a time factor for each subset using the driftR factor function
+factor_df <- pmap_dfr(manual_measurements_for_func, dr_factor_subset)
+
+
+#using factor and last 4 measurements from manual end ,corrects for drift so that manual end and the last measurement match up
+
+corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
+
+
+
+
   
+```
+
+## Graphing to check work
+
+```{r}
+  
+ indv_corrected_df <- filter(corrected_df, site_code == "PENN")
+ indv_manual_measurements <- filter(manual_measurements_for_func, site_name == "PENN")
+ 
+  
+ indv_corrected_graph <- ggplot()+
+  geom_line(data = indv_corrected_df, aes( x= DT , y= water_height_cm), color= "red")+
+  geom_line(data = indv_corrected_df, aes( x= DT , y= corrected_stage_cm), color= "black")+
+  geom_line(data = indv_corrected_df, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
+  geom_point(data =  indv_manual_measurements, aes( x= start_date , y= manual_start), color = "blue")+
+   theme_bw()
+
+plot(indv_corrected_graph)
+
+
+
+all_corrected_graph <- ggplot()+
+  geom_line(data = corrected_df, aes( x= DT , y= water_height_cm), color= "red")+
+  geom_line(data = corrected_df, aes( x= DT , y= corrected_stage_cm), color= "black")+
+  geom_line(data = corrected_df, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
+  geom_point(data =  manual_measurements_for_func, aes( x= start_date , y= manual_start), color = "blue")+
+   theme_bw()+
+   facet_wrap(~site_code)
+
+ggplotly(indv_corrected_graph)
+
+corrected_only_graph <- ggplot()+
+  geom_line(data = indv_corrected_df, aes( x= DT , y= water_height_cm), color= "red")+
+  geom_line(data = indv_corrected_df, aes( x= DT , y= corrected_stage_cm), color= "black")+
+  geom_point(data =  indv_manual_measurements, aes( x= start_date , y= manual_start), color = "blue")+
+   theme_bw()
+
+ggplotly(corrected_only_graph)
+
+
+
+```
+
+## Computing daily averages
+
+```{r}
+
+daily_means <- corrected_df%>%
+  select(water_height_cm, corrected_stage_cm, adjusted_stage, date, Site = site_code)%>%
+  group_by(date, Site)%>%
+  dplyr:: summarise(mean_sensor_stage_cm = mean(water_height_cm),
+         mean_adjusted_stage_cm = mean(adjusted_stage),
+         mean_corrected_stage_cm = mean(corrected_stage_cm))
+
+#Match up with FCW and ISCO Samples 
+
+site_labels <- c("FISH", "BEAV", "BENN", "SAWM", "PENN", "BLAK", "SHEP", "LBEA", "ROAR", "SAWM_ISCO", "FISH_ISCO", "LBEA_ISCO", 'BLAK_ISCO' )
+
+cam_pk_chem <- read.csv("data/CamPkChem.csv")%>%
+  filter(Era == "FCW" | Era == "ISCO")%>%
+  filter(SiteLabel %in% site_labels)%>%
+  mutate( date  = as.Date(Date, format = "%d-%b-%y"), 
+          Year = year(date), 
+          dayofyear = yday(date))%>%
+  filter(Year >=2022)%>%
+  filter(SampleType %in% c("NORM", "ISCO"))%>%
+  select(date, SiteLabel, Era, EraSamp, dayofyear, SampleType)%>%
+mutate(Site=ifelse(SiteLabel %in% c('FISH','FISH_ISCO'),"FISH",
+                   ifelse(SiteLabel %in% c('LBEA','LBEA_ISCO'),"LBEA",
+                   ifelse(SiteLabel %in% c('SAWM','SAWM_ISCO'),"SAWM",
+                   ifelse(SiteLabel %in% c('BLAK','BLAK_ISCO'),"BLAK",SiteLabel )))))
+
+
+
+sample_by_day <- cam_pk_chem%>%
+  group_by(Site, date, SampleType)%>%
+  dplyr::summarise( count = n())%>%
+  ungroup()
+
+
+
+
+
+
+daily_means_w_samples <- daily_means%>%
+  left_join( select(sample_by_day, c(Site, date, count,SampleType )), by = c("Site", "date") )
+
+
+
+sample_plot <- filter(daily_means_w_samples, Site == "FISH")%>%
+  ggplot()+
+  geom_line(aes(x= date, y = mean_sensor_stage_cm, group = Site, color = Site))+
+  geom_line(aes(x=date, y = mean_corrected_stage_cm, color = "black" ))+
+  geom_point(aes(x= date, y = count, color = SampleType ))
+
+plot(sample_plot)
+
+#Write daily averages file matched up with sample #
+
+write_csv(select(daily_means_w_samples, c(date,mean_sensor_stage_cm,mean_corrected_stage_cm, mean_adjusted_stage_cm, Site, SampleType, count)), "data/stage_daily_mean_and_samples_cleaned.csv")
+
+```
+
+## Playing with rating curve package 'brdc'
+
+```{r}
+library("bdrc")
+
+data(krokfors)
+
+fish_fake_rating <- data.frame(W = c(1, 2, 5, 10, 20, 50, 75, 80,100), Q = c(1, 1.5, 2, 2.5, 2.7, 5, 10, 15, 20))
+
+gplm.fit <- gplm(Q~W,krokfors)
+gplm.fit_fish_fake <- gplm(Q~W,fish_fake_rating)
+
+summary(gplm.fit_fish_fake)
+summary(gplm.fit)
+
+ plot(gplm.fit)
+ plot(gplm.fit_fish_fake)
+ 
+ h_grid <-data.frame(corrected_stage =  seq(8,9,by=0.01))%>%
+   mutate(site_name = "TEST", 
+          original_stage = seq(7,8,by=0.01))
+ 
+rating_curve_fake_test <- predict(gplm.fit, newdata = h_grid$original_stage)
+
+
+
+##Function to get rating curve for a specific site
+
+get_rating_curve <- function(site){
+  
+  stage_discharge <- filter(manual_stage_Q, site_name == site)%>%
+    select(W = manual_start, Q = discharge_m_s, site_name)
+    
+  rating_curve_fit <- gplm(Q~W, stage_discharge)
+  
+  Q_and_stage_df <- filter(corrected_df, site_name == site)%>%
+    predict(rating_curve_fit, newdata = corrected_df$corrected_stage_cm)
+  
+  return(rating_curve_fit)
+  
+  
+}
+ 
+
+ 
 ```
