@@ -42,17 +42,27 @@ library(Metrics)
 #training file 
 training <- read.csv("C:/Users/SamSillen/Desktop/WesternMountainsChlPreds-main/csvs/training.csv") 
 
+
+cpf_lakes <- read.csv("data/cpf_lagos_join_limnosat.csv")%>%
+  rename(red = Red, 
+         aerosol = Aerosol, 
+         blue = Blue,
+         green = Green, 
+         swir1 = Swir1,
+         swir2 = Swir2, 
+         nir = Nir)
+
 #add function to calculate dominant wavelength
 #you don't need this if your training file already has a dWL field
 source('C:/Users/SamSillen/Desktop/WesternMountainsChlPreds-main/ML_utils.R')
 
 #insert here whatever filtering you would like (i.e. p count >= x)
 
-training <- training %>%
-    filter(pixelCount > 9, 
-         clouds < 50,    
+training <- cpf_lakes%>%
+    filter(#pixelCount > 9, 
+         #clouds < 50,    
          across(c(blue, green, red, nir, swir1, swir2), ~ .x > 0 & .x < 2000)) %>% # taken from Simon Code (reasonable reflectance values)
-  mutate(dWL = fui.hue(red, green, blue), #this line isn't necessary if you already have dWL as a field
+  mutate(#dWL = fui.hue(red, green, blue), #this line isn't necessary if you already have dWL as a field
          red_to_blue = red/blue,
          red_to_nir = red/nir,
          nir_to_red = nir/red,
@@ -67,7 +77,7 @@ training <- training %>%
 #Now I will select all the optical variables in my training file, and determine which ones are correlated. I will only use uncorrelated vars as training features in my model 
 
 optical_data <- training %>%
-  select(blue, green, red, dWL, red_to_blue, red_to_nir, nir_to_red, blue_to_green, green_to_blue, blue_min_red_ovr_green, nir_sac, nir_sac2, nir_min_red)
+  select(blue, green, red, dwl, red_to_blue, red_to_nir, nir_to_red, blue_to_green, green_to_blue, blue_min_red_ovr_green, nir_sac, nir_sac2, nir_min_red)
 
 #get correlation matriz
 corr.matrix <- cor(optical_data)
