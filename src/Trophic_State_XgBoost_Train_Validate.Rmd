@@ -39,30 +39,15 @@ library(Metrics)
 
 1) Read in training file ; filter, calculate band ratios, and remove correlated variables 
 ```{r}
-#training file 
-training <- read.csv("C:/Users/SamSillen/Desktop/WesternMountainsChlPreds-main/csvs/training.csv") 
+training <- read.csv("data/training_sillen_model.csv") 
 
+source('src/ML_utils.R')
 
-cpf_lakes <- read.csv("data/cpf_lagos_join_limnosat.csv")%>%
-  rename(red = Red, 
-         aerosol = Aerosol, 
-         blue = Blue,
-         green = Green, 
-         swir1 = Swir1,
-         swir2 = Swir2, 
-         nir = Nir)
-
-#add function to calculate dominant wavelength
-#you don't need this if your training file already has a dWL field
-source('C:/Users/SamSillen/Desktop/WesternMountainsChlPreds-main/ML_utils.R')
-
-#insert here whatever filtering you would like (i.e. p count >= x)
-
-training <- cpf_lakes%>%
-    filter(#pixelCount > 9, 
-         #clouds < 50,    
-         across(c(blue, green, red, nir, swir1, swir2), ~ .x > 0 & .x < 2000)) %>% # taken from Simon Code (reasonable reflectance values)
-  mutate(#dWL = fui.hue(red, green, blue), #this line isn't necessary if you already have dWL as a field
+training <- training %>%
+  filter(pixelCount > 9, 
+         clouds < 50,    
+        across(c(blue, green, red, nir, swir1, swir2), ~ .x > 0 & .x < 2000)) %>% # taken from Simon Code (reasonable reflectance values ?)
+  mutate(dWL = fui.hue(red, green, blue),
          red_to_blue = red/blue,
          red_to_nir = red/nir,
          nir_to_red = nir/red,
@@ -73,31 +58,37 @@ training <- cpf_lakes%>%
          nir_sac2 = nir-1.03*swir1,
          nir_min_red = nir-red,
          id = row_number())
+#checking for correlated optical vars
 
-#Now I will select all the optical variables in my training file, and determine which ones are correlated. I will only use uncorrelated vars as training features in my model 
+optical_dat <- training %>%
+  select(blue, green, red, dWL, red_to_blue, red_to_nir, nir_to_red, blue_to_green, green_to_blue, blue_min_red_ovr_green, nir_sac, nir_sac2, nir_min_red)
 
-optical_data <- training %>%
-  select(blue, green, red, dwl, red_to_blue, red_to_nir, nir_to_red, blue_to_green, green_to_blue, blue_min_red_ovr_green, nir_sac, nir_sac2, nir_min_red)
+corr.matrix <- cor(optical_dat)
 
-#get correlation matriz
-corr.matrix <- cor(optical_data)
-
-#r of 0.9 is the cutoff, it's the default value I believe
 corr <- findCorrelation(corr.matrix, cutoff = 0.9)
 
 hc = sort(corr)
 
-#reduced data is are the uncorrelated variables that we are left with
 reduced_Data = corr.matrix[,-c(hc)]
 
-# The uncorrelated varsare: blue,  dwl, red_to_blue,red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red
-
-#only select uncorrelated optical vars and climate data to use as training data
+# uncorrelated vars: blue,  dwl, red_to_blue,red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red
 
 data <- training %>%
   select(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid,id, mean_temp_14_day, date, wind)
 
-#Xgboost won't take data with NAs, so drop them if you have any or check for them 
+#remove dups by using distinct
+
+data <- data %>%
+  distinct(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid, mean_temp_14_day, date, wind, .keep_all = TRUE)
+
+
+data$in_situ_cat <- cut(data$chl_a, breaks = c(0, 2.6, 7, 200), labels = c('oligotrophic', 'mesotrophic', 'eutrophic'))
+         
+#For xgboost categorical preds
+
+data$in_situ_cat <- as.numeric(as.factor(data$in_situ_cat))-1
+
+
 data <- data %>%
   drop_na()
 
@@ -106,7 +97,7 @@ data <- data %>%
 2) Set up train / test splits for random CV 
 ```{r}
 #response variable 
-target <- 'chl_a'
+target <- 'in_situ_cat'
 
 #predictor vars or 'training features'
 #temp and wind won't be applicable for models over rivers
@@ -130,29 +121,27 @@ dtest <- xgb.DMatrix(data = as.matrix(test[feats]), label = test[target][[1]])
 
 ```
 
-
 3) Hypertune xgboost parameters and save as 'best_params' 
 ```{r}
 
-#create grid of hyperparamters that are "conservative"
-
 grid_train <- expand.grid(
   max_depth= c(2,3,4), #max depth is Maximum depth of a tree. Increasing this value will make the model more complex and more likely to overfit.
-  subsample = c(.5,.8,1), #subsample describes the subsample ratio of the training instances. Setting it to 0.5 means that XGBoost would randomly sample half of the training data prior to growing trees, and this would prevent overfitting.
-  colsample_bytree= c(.5,.8,1), #col sample by tree specify the fraction of columns to be subsampled.
+  subsample = c(.5,.8,1),#subsample describes the subsample ratio of the training instances. Setting it to 0.5 means that XGBoost would randomly sample half of the training data prior to growing trees, and this would prevent overfitting
+  colsample_bytree= c(.5,.8,1),#col sample by tree specify the fraction of columns to be subsampled.
   eta = c(.01, 0.1), #eta shrinks the feature weights of new features to make the boosting process more conservative.
-  min_child_weight= c(1,3,5) #not sure about min child weight actually, check out : https://xgboost.readthedocs.io/en/stable/parameter.html for more information 
+  min_child_weight= c(1,3,5) 
 )
 
 #below is a function that select hyperparamters that result in the lowest model error (log loss)
+
 hypertune_xgboost = function(train,test, grid){
   
-  params <- list(booster = "gbtree", objective = 'reg:squaredlogerror', eta=grid$eta ,max_depth=grid$max_depth, 
+  params <- list(booster = "gbtree", objective = 'multi:softmax', eta=grid$eta ,max_depth=grid$max_depth, 
                  min_child_weight=grid$min_child_weight, subsample=grid$subsample, colsample_bytree=grid$colsample_bytree)
   
   xgb.naive <- xgb.train(params = params, data = dtrain, nrounds = 2000, 
                          watchlist = list(train = train, val = test), 
-                         print_every_n =100, early_stopping_rounds = 20)
+                         print_every_n =100, early_stopping_rounds = 20, num_class = 3)
   
   summary <- grid %>% mutate(val_loss = xgb.naive$best_score, best_message = xgb.naive$best_msg)
   
@@ -166,11 +155,11 @@ xgboost_hypertune <- grid_train %>%
     hypertune_xgboost(dtrain,dtest,current)
   })
 
-#pull out best params
-
 best_params <- xgboost_hypertune[xgboost_hypertune$val_loss==min(xgboost_hypertune$val_loss),]
 
-best_params <- list(booster = "gbtree", objective = 'reg:squaredlogerror',
+#pull out the best parameters
+
+best_params <- list(booster = "gbtree", objective = 'multi:softmax',
                eta=best_params$eta,
                max_depth=best_params$max_depth, 
                min_child_weight=best_params$min_child_weight, 
@@ -178,36 +167,45 @@ best_params <- list(booster = "gbtree", objective = 'reg:squaredlogerror',
                colsample_bytree=best_params$colsample_bytree)
 
 
-```
 
+```
 
 4) Re-train final model with best params , look at evaluation metrics from test data
 ```{r}
 #train final model with best params
-final_model <- xgb.train(params = best_params, data = dtrain, nrounds = 2000, print_every_n = 20)
+
+final_model <- xgb.train(params = best_params, data = dtrain, nrounds = 2000, 
+                         print_every_n = 20, num_class = 3)
 
 #evaluate model using trest data
+
 test <- test %>%
-  mutate(chl_predicted = predict(final_model, dtest))
+  mutate(trophic_predicted = predict(final_model, dtest),
+         in_situ_cat = case_when(in_situ_cat ==0~'oligotrophic',
+                                 in_situ_cat==1~'mesotrophic',
+                                 in_situ_cat==2~'eutrophic'),
+         trophic_predicted = case_when(trophic_predicted==0~'oligotrophic',
+                                       trophic_predicted==1~'mesotrophic',
+                                       trophic_predicted==2~'eutrophic'))
 
-evals <- test %>%
-  mutate(Actual = (chl_a), 
-         Predicted = (chl_predicted)) %>%
-  summarise(rmse = rmse(Actual, Predicted),
-            mae = mae(Actual, Predicted),
-            mape = mape(Actual, Predicted),
-            bias = bias(Actual, Predicted),
-            p.bias = percent_bias(Actual, Predicted),
-            smape = smape(Actual, Predicted)) 
 
-ggplot(test, aes(x = chl_a, y = chl_predicted)) +
-  geom_point()+
-  xlim(0, 100) + #I'm filtering out the really high chl_a obs for visualization, but would probably do this earlier on before training the model
-  ylim(0, 100) + #Now I'm making the axes the same size 
-  theme_bw() +
-  labs(x = 'Observed') +
-  labs(y = 'Predicted') + 
-  theme(axis.text.x=element_text(size=15, colour =  'black'),panel.grid.minor = element_blank(), panel.grid.major = element_blank(), axis.text.y = element_text(size=15,colour = 'black'), axis.title.x =     element_text(size=20, face = 'bold'),axis.title.y = element_text(size=20, face = 'bold'), legend.title = element_text(size = 15), legend.text = element_text(size = 15))
+cv <- confusionMatrix(factor(test$trophic_predicted),factor(test$in_situ_cat))
+
+cv
+
+plot <- as.data.frame(cv$table) %>%
+  rename(Frequency = "Freq")
+
+plot$Prediction <- factor(plot$Prediction, levels=rev(levels(plot$Prediction)))
+
+ggplot(plot, aes(Prediction,Reference, fill= Frequency)) +
+        geom_tile() + geom_text(aes(label=Frequency), size = 10) +
+        scale_fill_gradient(low="white", high="#2158bc", ) +
+        labs(x = "Observed",y = "Predicted", title = "") +
+        scale_x_discrete(labels=c("Oligotrophic", "Mesotrophic", "Eutrophic")) +
+        scale_y_discrete(labels=c( "Eutrophic", "Mesotrophic", "Oligotrophic")) +
+        theme_bw() +
+        theme(axis.text.x=element_text(size=15, colour = 'black'),panel.grid.minor = element_blank(), panel.grid.major = element_blank(), axis.text.y = element_text(size=15,colour = 'black'), axis.title.x =     element_text(size=20, face = 'bold'),axis.title.y = element_text(size=20, face = 'bold'), legend.title = element_text(size = 15), legend.text = element_text(size = 15)) 
 
 ```
 
@@ -217,6 +215,7 @@ imp <- xgb.importance(model = final_model)
 
 xgb.plot.importance(importance_matrix = imp)
 ```
+
 
 #Using the model to predict
 ```{r}
@@ -228,11 +227,12 @@ xgb.plot.importance(importance_matrix = imp)
 sf <- read.csv("C:/Users/samsi/Desktop/sf.csv")
 
 
-dtest <- xgb.DMatrix(data = as.matrix(sf.final.v3[feats]))
+dtest <- xgb.DMatrix(data = as.matrix(sf[feats]))
 
 
-sf.test <- sf.final.v3 %>%
+sf_final <- sf %>%
   mutate(trophic_predicted = predict(final_model, dtest))
 
 
+```
 ```
