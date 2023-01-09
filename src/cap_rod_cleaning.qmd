@@ -266,7 +266,46 @@ plot(indv_corrected_graph)
 
 
 
+```
+## Splitting sites where caprod was moved
+LBEA and SHEP had to be moved midseason so they are now being split into LBEA1/2 and SHEP1/2
 
+This section can be skipped if sensors did not move location thru the season
+
+```{R}
+
+
+
+# This dataframe contains the old names, new names and star/end dates for the name changes
+# If there are more moves, this can be written in as a csv with the same  column names and read in using the hashed out code below
+
+rename_df <- data.frame(old_name = c("LBEA", "LBEA", "SHEP","SHEP"), 
+                       new_name = c("LBEA1", "LBEA2", "SHEP1", "SHEP2"), 
+                       start_date = c("2022-05-01 12:00","2022-08-19 10:15","2022-05-01 12:00","2022-08-19 12:30"), 
+                       end_date= c("2022-08-19 10:00","2022-11-01 12:00","2022-08-17 15:15","2022-11-01 12:00"))%>% mutate(start_date = as.POSIXct(start_date, format = "%Y-%m-%d %H:%M", tz = "MST"),
+         end_date = as.POSIXct(end_date, format = "%Y-%m-%d %H:%M", tz = "MST"))
+
+# rename_df <- read.csv("FILE_PATH_TO.CSV")%>% 
+#mutate(start_date = as.POSIXct(start_date, format = "%Y-%m-%d %H:%M", tz = "MST"),
+#          end_date = as.POSIXct(end_date, format = "%Y-%m-%d %H:%M", tz = "MST"))
+
+
+change_site_names <- function(old_name, new_name, start_date, end_date){
+  test_function <- corrected_df%>%
+    dplyr:: filter(site_code == old_name & between(DT, start_date, end_date) )%>%
+    mutate(site_code = new_name)
+  
+  return(test_function)
+}
+
+non_name_changed_df = corrected_df[!(corrected_df$site_code %in% unique(rename_df$old_name)),]
+
+corrected_df<- pmap_dfr(rename_df, change_site_names)%>%
+  rbind(non_name_changed_df)
+
+#Check that all the new names are in df and old names removed
+unique(corrected_df$site_code)
+#If old names persist you may need to change the start/end dates so that all rows are included
 
 
 ```
