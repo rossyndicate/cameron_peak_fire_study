@@ -310,6 +310,47 @@ unique(corrected_df$site_code)
 
 ```
 
+##Add flag type column and associated title
+
+Flags were determined visually and compared to field notes about the streams. 
+
+```{r}
+
+
+flag_values<- read.csv("data/flag_values_caprods_2022.csv")%>%
+  mutate(start_dt = as.POSIXct(start_dt, format = "%m/%d/%Y %H:%M", tz = "MST"),
+         end_dt = as.POSIXct(end_dt, format = "%m/%d/%Y %H:%M", tz = "MST"))
+
+apply_flag <- function(site, FLAG, start_dt, end_dt, notes){
+correct_and_flagged_df <- corrected_df%>%
+  dplyr::filter(corrected_df$site_code %in% site)%>%
+  dplyr::filter(between(DT,start_dt, end_dt))%>%
+  mutate(flag_type = FLAG, 
+         note = notes)
+
+return(correct_and_flagged_df)
+  
+}
+
+correct_and_flagged_df <- pmap_dfr(flag_values, apply_flag)
+
+flag_colors <- c("PASS" = "green", "FAIL" = "red", "TREND" = "purple", "VARIATION"= "blue", "CHANNEL"= "orange") 
+
+indv_site <- correct_and_flagged_df%>%
+  filter(site_code == "SAWM")
+
+
+
+indv_site_flags <- ggplot()+
+  geom_point(data = indv_site, aes(x = DT, y= corrected_stage_cm, color = flag_type ))+
+  scale_color_manual(values = flag_colors)+
+  theme_bw()
+                     
+plot(indv_site_flags)                     
+                    
+                     
+```
+
 ## Computing daily averages
 
 ```{r}
