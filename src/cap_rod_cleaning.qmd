@@ -179,8 +179,6 @@ In broad strokes, these functions/loops will take the sensor data pulled in abov
       return(factor_df)
     }
     
-    
-    blak_factor <- filter(factor_df, site_code == "BLAK")
 ##Function to correct drift over a subset by looking at measured values and the previous 4
 ## dataframe must already have corrFac added or it will not run
     
@@ -250,8 +248,8 @@ corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
 
 ```{r}
   
- indv_corrected_df <- filter(corrected_df, site_code == "PENN")
- indv_manual_measurements <- filter(manual_measurements_for_func, site_name == "PENN")
+ indv_corrected_df <- filter(corrected_df, site_code == "BEAV")
+ indv_manual_measurements <- filter(manual_measurements_for_func, site_name == "BEAV")
  
   
  indv_corrected_graph <- ggplot()+
@@ -260,28 +258,14 @@ corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
   geom_line(data = indv_corrected_df, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
   geom_point(data =  indv_manual_measurements, aes( x= start_date , y= manual_start), color = "blue")+
    theme_bw()
-
+ggplotly(indv_corrected_graph)
 plot(indv_corrected_graph)
 
 
 
-all_corrected_graph <- ggplot()+
-  geom_line(data = corrected_df, aes( x= DT , y= water_height_cm), color= "red")+
-  geom_line(data = corrected_df, aes( x= DT , y= corrected_stage_cm), color= "black")+
-  geom_line(data = corrected_df, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
-  geom_point(data =  manual_measurements_for_func, aes( x= start_date , y= manual_start), color = "blue")+
-   theme_bw()+
-   facet_wrap(~site_code)
 
-ggplotly(indv_corrected_graph)
 
-corrected_only_graph <- ggplot()+
-  geom_line(data = indv_corrected_df, aes( x= DT , y= water_height_cm), color= "red")+
-  geom_line(data = indv_corrected_df, aes( x= DT , y= corrected_stage_cm), color= "black")+
-  geom_point(data =  indv_manual_measurements, aes( x= start_date , y= manual_start), color = "blue")+
-   theme_bw()
 
-ggplotly(corrected_only_graph)
 
 
 
