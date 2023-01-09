@@ -27,6 +27,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Packages
 ```{r}
+setwd("~/Repositories/cameron_peak_fire_study")
 library(tidyverse)
 library(xgboost)
 library(caret)
@@ -37,7 +38,73 @@ library(colorscience)
 library(Metrics)
 ```
 
-1) Read in training file ; filter, calculate band ratios, and remove correlated variables 
+0) Read in skin temp CSVs from LakeCoSTR, CPF lakes limnosat pull and combine
+```{r}
+read_and_combine <- function(folder_path, full_folder_path){
+  
+  # This ensures that version 2.0+ of the readr package (tidyverse) is being
+  # used, because it allows for reading multiple files
+  readr::local_edition(2) 
+  
+  # Read in all data files from all
+  all_data <- read_csv(
+    # Provide a vector/list of filenames to read
+    file = list.files(
+      path = folder_path,
+      # Search in all subfolders of `path` for csv files
+      recursive = TRUE,
+      # Use full filenames so R can find them
+      full.names = TRUE),
+    # Store the path to each csv in a "path" column
+    id = "path")
+  
+  # Now tidy up the dataset before returning it to the main workflow
+  cleaned_data <- all_data %>%
+    mutate(
+      # Create a new column with a shortened version of the path
+      site_code = gsub(pattern = full_folder_path,
+                     replacement = "",
+                     x = path),
+      # Extract just the folder name from this shortened version of the path
+      site_code = str_extract(string = site_code,
+      # Remove everything after the first bit of upper case text
+        pattern = "[A-Z]+"),
+      date_str = substring(`system:index`,nchar(`system:index`)-7,nchar(`system:index`) ),
+         date = as.Date(date_str, format = "%Y%m%d")
+  
+      
+      #DT =  as.POSIXct(datetime, format = "%m/%d/%Y %H:%M", tz = "MST")
+    )%>%
+    select(-c(date_str, path))
+}
+
+reservoir_skin_temps <- read_and_combine(folder_path = "~/Repositories/cameron_peak_fire_study/data/skin_temp_csvs",
+                                    full_folder_path = "C:/Users/Sam Struthers/OneDrive - Colostate/Documents/Repositories/cameron_peak_fire_study/data/skin_temp_csvs/")
+
+
+cpf_lakes_limnosat <- read.csv("data/cpf_lagos_join_limnosat.csv")%>%
+  mutate(site_code = ifelse(lake_namegnis == "Barnes Meadow Reservoir", "BRNR",
+                     ifelse(lake_namegnis == "Joe Wright Reservoir", "JOER",
+                     ifelse(lake_namegnis == "Chambers Lake", "CBRR",
+                     ifelse(lake_namegnis == "Peterson Lake", "PTRR",
+                     ifelse(lake_namegnis == "Long Draw Reservoir", "LNGR",
+                     ifelse(lake_namegnis == "Halligan Reservoir", "HALR",
+                     ifelse(lake_namegnis == "Seaman Reservoir", "SEAR","HSTR"))))))), 
+         date= as.Date(date))%>%
+  select(LandsatID,date, site_code,  aerosol = Aerosol, blue=Blue, green = Green, red =Red, nir = Nir, swir1 = Swir1, swir2= Swir2, dwl, clouds = cScore_clouds, pixel_qa, hillShadow, sd_NirSD, pCount_dswe3,pCount_dswe1,lake_nhdid, lagoslakeid, hu12_zoneid, year, distance, system.index, TIR1, TIR2)%>%
+  #join with temp dataframe
+  left_join(., reservoir_skin_temps, by = c("site_code", "date"))
+
+#omits all the NA values (ie sites that don't have temp)
+#Dataset now only includes 5 study reservoirs
+cpf_lakes_temp_dwl <- cpf_lakes_limnosat%>%
+  na.omit()
+
+
+```
+
+1) Read in Sillen training file ; filter, calculate band ratios, and remove correlated variables
+
 ```{r}
 training <- read.csv("data/training_sillen_model.csv") 
 
