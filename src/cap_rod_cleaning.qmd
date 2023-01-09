@@ -350,6 +350,23 @@ plot(indv_site_flags)
                     
                      
 ```
+## Exporting 15min finalized data
+```{r}
+final_df<- correct_and_flagged_df%>%
+  select(DT, site_code, 
+         sensor_stage_mm = water_height_mm, 
+         sensor_stage_cm = water_height_cm, 
+         adjustment_cm = adjustment,
+         adjusted_stage_cm = adjusted_stage,
+         time_correction_value = corrFac, 
+         corrected_stage_cm,
+         flag_type, 
+         notes = note,
+         date, time)
+
+write.csv(final_df, "data/corrected_15min_stage_CPF_2022.csv")
+
+```
 
 ## Computing daily averages
 
@@ -405,9 +422,18 @@ sample_plot <- filter(daily_means_w_samples, Site == "FISH")%>%
 
 plot(sample_plot)
 
+```
+##exporting corrected daily means data
+```{r}
+
 #Write daily averages file matched up with sample #
 
-write_csv(select(daily_means_w_samples, c(date,mean_sensor_stage_cm,mean_corrected_stage_cm, mean_adjusted_stage_cm, Site, SampleType, count)), "data/stage_daily_mean_and_samples_cleaned.csv")
+final_daily_means <- daily_means_w_samples%>%
+  select(date,site_code, mean_sensor_stage_cm, mean_adjusted_stage_cm, mean_corrected_stage_cm,SampleType ,sampleCount = count, flag_type, note, site_label)
+
+write_csv(final_daily_means, "data/stage_daily_mean_and_samples_cleaned.csv")
+
+
 
 ```
 
