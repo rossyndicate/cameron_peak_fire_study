@@ -373,52 +373,82 @@ write.csv(final_df, "data/corrected_15min_stage_CPF_2022.csv")
 ```{r}
 
 daily_means <- corrected_df%>%
-  select(water_height_cm, corrected_stage_cm, adjusted_stage, date, Site = site_code)%>%
-  group_by(date, Site)%>%
+  select(water_height_cm, corrected_stage_cm, adjusted_stage, date, site_code)%>%
+  group_by(date, site_code)%>%
   dplyr:: summarise(mean_sensor_stage_cm = mean(water_height_cm),
          mean_adjusted_stage_cm = mean(adjusted_stage),
-         mean_corrected_stage_cm = mean(corrected_stage_cm))
+         mean_corrected_stage_cm = mean(corrected_stage_cm))%>%
+  ungroup()%>%
+   ##IGNORE UNLESS YOU NEED TO MATCH GRAB SAMPLES UP TO SITES
+  mutate(site_label = ifelse(site_code %in% c("LBEA1", "LBEA2"), "LBEA",
+                      ifelse(site_code %in% c("SHEP1", "SHEP2"), "SHEP",site_code)))
+  ##HASH OUT EVERYTHING ABOVE IF NOT MATCHING SAMPLES AND 
 
 #Match up with FCW and ISCO Samples 
 
-site_labels <- c("FISH", "BEAV", "BENN", "SAWM", "PENN", "BLAK", "SHEP", "LBEA", "ROAR", "SAWM_ISCO", "FISH_ISCO", "LBEA_ISCO", 'BLAK_ISCO' )
+site_labels <- c("FISH", "BEAV", "BENN", "SAWM", "PENN", "BLAK", "SHEP", "LBEA", "ROAR", "SAWM_ISCO", "FISH_ISCO", "LBEA_ISCO", 'BLAK_ISCO', "LBEAISCO", "BLAKISCO", "SAWMISCO", "FISHISCO" )
 
 cam_pk_chem <- read.csv("data/CamPkChem.csv")%>%
   filter(Era == "FCW" | Era == "ISCO")%>%
-  filter(SiteLabel %in% site_labels)%>%
+  dplyr::rename(site_label = SiteLabel)%>%
+  filter(site_label %in% site_labels)%>%
   mutate( date  = as.Date(Date, format = "%d-%b-%y"), 
           Year = year(date), 
           dayofyear = yday(date))%>%
   filter(Year >=2022)%>%
   filter(SampleType %in% c("NORM", "ISCO"))%>%
-  select(date, SiteLabel, Era, EraSamp, dayofyear, SampleType)%>%
-mutate(Site=ifelse(SiteLabel %in% c('FISH','FISH_ISCO'),"FISH",
-                   ifelse(SiteLabel %in% c('LBEA','LBEA_ISCO'),"LBEA",
-                   ifelse(SiteLabel %in% c('SAWM','SAWM_ISCO'),"SAWM",
-                   ifelse(SiteLabel %in% c('BLAK','BLAK_ISCO'),"BLAK",SiteLabel )))))
+  select(date, site_label, Era, EraSamp, dayofyear, SampleType)%>%
+mutate(site_label=ifelse(site_label %in% c('FISH','FISH_ISCO'),"FISH",
+                   ifelse(site_label %in% c('LBEA','LBEA_ISCO', "LBEAISCO"),"LBEA",
+                   ifelse(site_label %in% c('SAWM','SAWM_ISCO'),"SAWM",
+                   ifelse(site_label %in% c('BLAK','BLAK_ISCO'),"BLAK",site_label )))))
 
 
 
 sample_by_day <- cam_pk_chem%>%
-  group_by(Site, date, SampleType)%>%
+  group_by(site_label, date, SampleType)%>%
   dplyr::summarise( count = n())%>%
   ungroup()
 
+#create df of sites and codes for data flag but on a daily timescale
+
+flag_daily_values<- flag_values%>%
+  mutate(start_date = as.Date(start_dt), 
+         end_date = as.Date(end_dt))%>%
+  select(site, FLAG, start_date, end_date, notes)
+
+#changed apply_flag to work on daily timestep rather than by DT
+
+apply_flag_daily <- function(site, FLAG, start_date, end_date, notes){
+correct_and_flagged_daily_df <- daily_means%>%
+  dplyr::filter(between(date,start_date, end_date))%>%
+  dplyr::filter(site_code == site)%>%
+  mutate(flag_type = FLAG, 
+         note = notes)
+
+return(correct_and_flagged_daily_df)
+  
+}
 
 
 
 
-
-daily_means_w_samples <- daily_means%>%
-  left_join( select(sample_by_day, c(Site, date, count,SampleType )), by = c("Site", "date") )
+correct_and_flagged_daily_df <- pmap_dfr(flag_daily_values, apply_flag_daily)
 
 
 
-sample_plot <- filter(daily_means_w_samples, Site == "FISH")%>%
+daily_means_w_samples <- correct_and_flagged_daily_df%>%
+  left_join( select(sample_by_day, c(site_label, date, count,SampleType )), by = c("site_label", "date") )
+
+
+
+sample_plot <- filter(daily_means_w_samples, site_code == "FISH")%>%
   ggplot()+
-  geom_line(aes(x= date, y = mean_sensor_stage_cm, group = Site, color = Site))+
-  geom_line(aes(x=date, y = mean_corrected_stage_cm, color = "black" ))+
-  geom_point(aes(x= date, y = count, color = SampleType ))
+  geom_line(aes(x= date, y = mean_corrected_stage_cm, group = site_code, color = flag_type))+
+  geom_line(aes(x= date, y = mean_sensor_stage_cm, group = site_code, color = flag_type))+
+  scale_color_manual(values = flag_colors)+
+  #geom_line(aes(x=date, y = mean_corrected_stage_cm, color = "red" ))+
+  geom_point(aes(x= date, y = count, color = "grey" ))
 
 plot(sample_plot)
 
@@ -436,6 +466,7 @@ write_csv(final_daily_means, "data/stage_daily_mean_and_samples_cleaned.csv")
 
 
 ```
+
 
 ## Playing with rating curve package 'brdc'
 
