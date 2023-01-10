@@ -1,5 +1,5 @@
 ---
-title: "cap rod intake"
+title: "cap rod cleaning"
 format: html
 editor: visual
 ---
@@ -248,8 +248,8 @@ corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
 
 ```{r}
   
- indv_corrected_df <- filter(corrected_df, site_code == "BEAV")
- indv_manual_measurements <- filter(manual_measurements_for_func, site_name == "BEAV")
+indv_corrected_df <- filter(corrected_df, site_code == "LBEA")
+ indv_manual_measurements <- filter(manual_measurements_for_func, site_name == "LBEA")
  
   
  indv_corrected_graph <- ggplot()+
@@ -267,7 +267,9 @@ plot(indv_corrected_graph)
 
 
 ```
+
 ## Splitting sites where caprod was moved
+
 LBEA and SHEP had to be moved midseason so they are now being split into LBEA1/2 and SHEP1/2
 
 This section can be skipped if sensors did not move location thru the season
@@ -312,7 +314,7 @@ unique(corrected_df$site_code)
 
 ##Add flag type column and associated title
 
-Flags were determined visually and compared to field notes about the streams. 
+Flags were determined visually and compared to field notes about the streams.
 
 ```{r}
 
@@ -337,7 +339,7 @@ correct_and_flagged_df <- pmap_dfr(flag_values, apply_flag)
 flag_colors <- c("PASS" = "green", "FAIL" = "red", "TREND" = "purple", "VARIATION"= "blue", "CHANNEL"= "orange") 
 
 indv_site <- correct_and_flagged_df%>%
-  filter(site_code == "SAWM")
+  filter(site_code == "BLAK")
 
 
 
@@ -350,7 +352,9 @@ plot(indv_site_flags)
                     
                      
 ```
+
 ## Exporting 15min finalized data
+
 ```{r}
 final_df<- correct_and_flagged_df%>%
   select(DT, site_code, 
@@ -453,7 +457,9 @@ sample_plot <- filter(daily_means_w_samples, site_code == "FISH")%>%
 plot(sample_plot)
 
 ```
+
 ##exporting corrected daily means data
+
 ```{r}
 
 #Write daily averages file matched up with sample #
@@ -467,50 +473,134 @@ write_csv(final_daily_means, "data/stage_daily_mean_and_samples_cleaned.csv")
 
 ```
 
-
 ## Playing with rating curve package 'brdc'
 
 ```{r}
+
 library("bdrc")
 
 data(krokfors)
 
-fish_fake_rating <- data.frame(W = c(1, 2, 5, 10, 20, 50, 75, 80,100), Q = c(1, 1.5, 2, 2.5, 2.7, 5, 10, 15, 20))
-
 gplm.fit <- gplm(Q~W,krokfors)
-gplm.fit_fish_fake <- gplm(Q~W,fish_fake_rating)
 
-summary(gplm.fit_fish_fake)
 summary(gplm.fit)
 
  plot(gplm.fit)
- plot(gplm.fit_fish_fake)
+
  
- h_grid <-data.frame(corrected_stage =  seq(8,9,by=0.01))%>%
-   mutate(site_name = "TEST", 
-          original_stage = seq(7,8,by=0.01))
  
-rating_curve_fake_test <- predict(gplm.fit, newdata = h_grid$original_stage)
+ 
+
+
+#IF stage is the same, don't measure discharge
+
+
+##ENTER THE FUNCTION ZONE
+
+manual_h_q <- read.csv("data/manual_values_dec_2022.csv")%>%
+  na.omit(Q_cfs)%>%
+  filter(site_code != "LBEA" & site_code != "SHEP")%>%
+  select(H = first_measurement_cm, Q = Q_cfs, site_code)
 
 
 
-##Function to get rating curve for a specific site
 
-get_rating_curve <- function(site){
+
+df_for_q_test <- final_df%>%
+  filter(site_code != "LBEA1" &site_code != "LBEA2"&site_code != "SHEP1" &site_code != "SHEP2")
+
+unique(df_for_q_test$site_code)
+
+
+create_rating_curve <- function(site){
   
-  stage_discharge <- filter(manual_stage_Q, site_name == site)%>%
-    select(W = manual_start, Q = discharge_m_s, site_name)
-    
-  rating_curve_fit <- gplm(Q~W, stage_discharge)
-  
-  Q_and_stage_df <- filter(corrected_df, site_name == site)%>%
-    predict(rating_curve_fit, newdata = corrected_df$corrected_stage_cm)
-  
-  return(rating_curve_fit)
+  site_manual_h_q <- manual_h_q%>%
+    dplyr::filter(site_code == site)%>%
+    mutate(logH = log10(H),
+           logQ = log10(Q))
   
   
+  # create linear model based on log of both functions
+  rc_lm <- lm(logQ ~ logH, data = site_manual_h_q )
+  
+  #summary of lm created
+  rc_summary <- summary(rc_lm)
+  
+    site_manual_h_q<- site_manual_h_q%>%
+  mutate(
+         a = (10^(rc_summary$coefficients[1,1])),
+           b = rc_summary$coefficients[2,1],
+           r2 = rc_summary$r.squared,
+         Q_cfs = (a*(H)^b) )
+
+  return(site_manual_h_q)
 }
- 
 
- 
+
+
+site_list <- data.frame(site = c("FISH", "SAWM", "BLAK", "PENN", "BEAV", "BENN"))%>%
+  as_tibble()
+
+#using manual dataframe to create coefficients for each site
+manual_H_Q_check <- pmap_dfr(site_list, create_rating_curve)
+
+#double check that modelled Q matches measured Q
+double_check_model <- manual_H_Q_check%>%
+  ggplot()+
+  geom_point(aes(x= H, y = Q), color= "blue")+
+  geom_point(aes(x= H, y = Q_cfs), color= "red")+
+  geom_line(aes(x= H, y = Q_cfs), color= "green")+
+  theme_bw()+
+  facet_wrap(~site_code)
+
+plot(double_check_model)  
+  
+  
+
+  
+
+calc_Q_for_sensor_stage_15min <- function(site){
+  
+  site_rc <- manual_H_Q_check%>%
+    dplyr::filter(site_code == site)
+  
+  #filter corrected stage df for site
+   stage_Q_df <- df_for_q_test%>%
+     dplyr::filter(site_code == site)%>%
+     #grab a, b, c and sigma for the given site from rc summary
+     mutate( a = site_rc$a[1],
+           b = site_rc$b[1],
+           r2 = site_rc$r2[1],
+            #calculate Q for the site based on a,b,c and stage given
+            Q_cfs = 
+              #If the stage is below the lowest stage where Q was measured, make it the lowest Q value measured
+              #extrapolation with this few of values is unwise
+              ifelse(corrected_stage_cm < min(site_rc$H),  min(site_rc$Q),
+             #Similar Idea to above but with max stage measured        
+              ifelse(corrected_stage_cm >max(site_rc$H),  max(site_rc$Q),
+             #if it within the bounds of measured stage values, use a, b to calc Q        
+                     
+     (a*(corrected_stage_cm)^b))))
+  
+  
+return(stage_Q_df)
+}
+
+
+
+
+stage_Q_test <- pmap_dfr(site_list, calc_Q_for_sensor_stage)
+
+
+
+
+double_check_stage_Q <- filter(stage_Q_test, site_code == "SAWM")%>%
+  ggplot()+
+  geom_line(aes(x= DT, y = Q_cfs, group = site_code, color = flag_type))+
+  scale_color_manual(values = flag_colors)+
+  theme_bw()
+
+ggplotly(double_check_stage_Q)
+
+
 ```
