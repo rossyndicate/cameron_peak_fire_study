@@ -356,7 +356,7 @@ plot(indv_site_flags)
 ## Exporting 15min finalized data
 
 ```{r}
-final_df<- correct_and_flagged_df%>%
+final_stage_df<- correct_and_flagged_df%>%
   select(DT, site_code, 
          sensor_stage_mm = water_height_mm, 
          sensor_stage_cm = water_height_cm, 
@@ -368,7 +368,7 @@ final_df<- correct_and_flagged_df%>%
          notes = note,
          date, time)
 
-write.csv(final_df, "data/corrected_15min_stage_CPF_2022.csv")
+write.csv(final_stage_df, "data/corrected_15min_stage_CPF_2022.csv")
 
 ```
 
@@ -376,7 +376,7 @@ write.csv(final_df, "data/corrected_15min_stage_CPF_2022.csv")
 
 ```{r}
 
-daily_means <- corrected_df%>%
+daily_means_stage <- corrected_df%>%
   select(water_height_cm, corrected_stage_cm, adjusted_stage, date, site_code)%>%
   group_by(date, site_code)%>%
   dplyr:: summarise(mean_sensor_stage_cm = mean(water_height_cm),
@@ -424,7 +424,7 @@ flag_daily_values<- flag_values%>%
 #changed apply_flag to work on daily timestep rather than by DT
 
 apply_flag_daily <- function(site, FLAG, start_date, end_date, notes){
-correct_and_flagged_daily_df <- daily_means%>%
+correct_and_flagged_daily_df <- daily_means_stage%>%
   dplyr::filter(between(date,start_date, end_date))%>%
   dplyr::filter(site_code == site)%>%
   mutate(flag_type = FLAG, 
@@ -441,12 +441,12 @@ correct_and_flagged_daily_df <- pmap_dfr(flag_daily_values, apply_flag_daily)
 
 
 
-daily_means_w_samples <- correct_and_flagged_daily_df%>%
+daily_means_stage_w_samples <- correct_and_flagged_daily_df%>%
   left_join( select(sample_by_day, c(site_label, date, count,SampleType )), by = c("site_label", "date") )
 
 
 
-sample_plot <- filter(daily_means_w_samples, site_code == "FISH")%>%
+sample_plot <- filter(daily_means_stage_w_samples, site_code == "FISH")%>%
   ggplot()+
   geom_line(aes(x= date, y = mean_corrected_stage_cm, group = site_code, color = flag_type))+
   geom_line(aes(x= date, y = mean_sensor_stage_cm, group = site_code, color = flag_type))+
@@ -458,22 +458,34 @@ plot(sample_plot)
 
 ```
 
-##exporting corrected daily means data
+##Exporting corrected daily means data
 
 ```{r}
 
 #Write daily averages file matched up with sample #
 
-final_daily_means <- daily_means_w_samples%>%
+final_daily_means_stage <- daily_means_stage_w_samples%>%
   select(date,site_code, mean_sensor_stage_cm, mean_adjusted_stage_cm, mean_corrected_stage_cm,SampleType ,sampleCount = count, flag_type, note, site_label)
 
-write_csv(final_daily_means, "data/stage_daily_mean_and_samples_cleaned.csv")
+write_csv(final_daily_means_stage, "data/stage_daily_mean_and_samples_cleaned.csv")
 
 
 
 ```
 
-## Playing with rating curve package 'brdc'
+#Calculating Q
+
+This section contains 2 ways to calculate rating curves:
+1. For datasets where there are few measurements, the function Q ~ (a*H)^b
+
+2. For datasets with more Q/stage measurements, the package "bdrc" may be a more accurate solution
+  This package calculates more error guidelines but takes a while to run. 
+
+## Playing with rating curve package 'bdrc'
+
+FOR LARGER DATASETS USE THIS PACKAGE. 
+NEEDS FUNCTION DEVELOPMENT TO MAP THROUGH MULTIPLE SITES
+CODE IN CHUNK IS EXAMPLE DATASET PROVIDED WITH PACKAGE
 
 ```{r}
 
@@ -487,34 +499,17 @@ summary(gplm.fit)
 
  plot(gplm.fit)
 
+```
  
- 
- 
-
-
-#IF stage is the same, don't measure discharge
-
-
-##ENTER THE FUNCTION ZONE
-
-manual_h_q <- read.csv("data/manual_values_dec_2022.csv")%>%
-  na.omit(Q_cfs)%>%
-  filter(site_code != "LBEA" & site_code != "SHEP")%>%
-  select(H = first_measurement_cm, Q = Q_cfs, site_code)
 
 
 
-
-
-df_for_q_test <- final_df%>%
-  filter(site_code != "LBEA1" &site_code != "LBEA2"&site_code != "SHEP1" &site_code != "SHEP2")
-
-unique(df_for_q_test$site_code)
-
+##Functions for Q calculations
+```{r}
 
 create_rating_curve <- function(site){
   
-  site_manual_h_q <- manual_h_q%>%
+  site_manual_h_q <- h_q_df%>%
     dplyr::filter(site_code == site)%>%
     mutate(logH = log10(H),
            logQ = log10(Q))
@@ -538,34 +533,13 @@ create_rating_curve <- function(site){
 
 
 
-site_list <- data.frame(site = c("FISH", "SAWM", "BLAK", "PENN", "BEAV", "BENN"))%>%
-  as_tibble()
-
-#using manual dataframe to create coefficients for each site
-manual_H_Q_check <- pmap_dfr(site_list, create_rating_curve)
-
-#double check that modelled Q matches measured Q
-double_check_model <- manual_H_Q_check%>%
-  ggplot()+
-  geom_point(aes(x= H, y = Q), color= "blue")+
-  geom_point(aes(x= H, y = Q_cfs), color= "red")+
-  geom_line(aes(x= H, y = Q_cfs), color= "green")+
-  theme_bw()+
-  facet_wrap(~site_code)
-
-plot(double_check_model)  
-  
-  
-
-  
-
 calc_Q_for_sensor_stage_15min <- function(site){
   
-  site_rc <- manual_H_Q_check%>%
+  site_rc <- manual_H_Q_rc%>%
     dplyr::filter(site_code == site)
   
   #filter corrected stage df for site
-   stage_Q_df <- df_for_q_test%>%
+   stage_Q_df <- final_stage_df%>%
      dplyr::filter(site_code == site)%>%
      #grab a, b, c and sigma for the given site from rc summary
      mutate( a = site_rc$a[1],
@@ -586,21 +560,205 @@ calc_Q_for_sensor_stage_15min <- function(site){
 return(stage_Q_df)
 }
 
+calc_Q_for_sensor_stage_daily <- function(site){
+  
+  site_rc <- manual_H_Q_rc%>%
+    dplyr::filter(site_code == site)
+  
+  #filter corrected stage df for site
+   daily_stage_Q_df <- final_daily_means_stage%>%
+     dplyr::filter(site_code == site)%>%
+     #grab a, b, c and sigma for the given site from rc summary
+     mutate( a = site_rc$a[1],
+           b = site_rc$b[1],
+           r2 = site_rc$r2[1],
+            #calculate Q for the site based on a,b,c and stage given
+            Q_cfs = 
+              #If the stage is below the lowest stage where Q was measured, make it the lowest Q value measured
+              #extrapolation with this few of values is unwise
+              ifelse(mean_corrected_stage_cm < min(site_rc$H),  min(site_rc$Q),
+             #Similar Idea to above but with max stage measured        
+              ifelse(mean_corrected_stage_cm >max(site_rc$H),  max(site_rc$Q),
+             #if it within the bounds of measured stage values, use a, b to calc Q        
+                     
+     (a*(mean_corrected_stage_cm)^b))))
+  
+  
+return(daily_stage_Q_df)
+}
+
+
+EXTRAPOLATION_Q_sensor_15min <- function(site){
+  
+  site_rc <- manual_H_Q_rc%>%
+    dplyr::filter(site_code == site)
+  
+  #filter corrected stage df for site
+   extrapolated_stage_Q_df <- df_for_q_test%>%
+     dplyr::filter(site_code == site)%>%
+     #grab a, b, c and sigma for the given site from rc summary
+     mutate( a = site_rc$a[1],
+           b = site_rc$b[1],
+           r2 = site_rc$r2[1],
+            #calculate Q for the site based on a,b,c and stage given
+            Q_cfs = (a*(corrected_stage_cm)^b))
+  
+  
+return(extrapolated_stage_Q_df)
+}
+
+EXTRAPOLATION_Q_sensor_daily <- function(site){
+  
+  site_rc <- manual_H_Q_rc%>%
+    dplyr::filter(site_code == site)
+  
+  #filter corrected stage df for site
+   daily_extrapolated_stage_Q_df <- final_daily_means_stage%>%
+     dplyr::filter(site_code == site)%>%
+     #grab a, b, c and sigma for the given site from rc summary
+     mutate( a = site_rc$a[1],
+           b = site_rc$b[1],
+           r2 = site_rc$r2[1],
+            #calculate Q for the site based on a,b,c and stage given
+            Q_cfs = (a*(mean_corrected_stage_cm)^b))
+  
+  
+return(daily_extrapolated_stage_Q_df)
+}
 
 
 
-stage_Q_test <- pmap_dfr(site_list, calc_Q_for_sensor_stage)
+```
+
+
+## Doing Q calculations
+
+Reading in manual measurements and bringing in final_stage_df
+
+Steps:
+1) Run through all manual measurements to create rating curve model and save coefficients
+2) Double check that measured and modeled Q are in acceptable ranges
+- RERUN WITHOUT CERTAIN MEASUREMENTS IF NECESSARY
+- USE BEST JUDGEMENT HERE
+3) Run modeled rating curves over sensor stage at 15min interval and daily interval
+  Q IS BOUNDED AT UPPER AND LOWER MANUAL MEASUREMENTS.
+  IF Q IS DESIRED TO BE EXTRAPOLATED, USE EXTRAPOLATION_Q_sensor_15min and EXTRAPOLATION_Q_sensor_daily (not recommended)
+  
+  
+###Manual stage/Q import, cleaning and model creation  
+
+```{r}
+
+#Import csv with measurement DT, stage H and measured Q
+
+manual_h_q <- read.csv("data/manual_stage_Q_jan2023.csv")%>%
+  mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M", tz = "MST"))%>%
+  na.omit(Q_cfs)
+
+
+### If site was split can use this section
+change_name_manual <-function(old_name, new_name, start_date, end_date){
+  renamed_manual_df <- manual_h_q%>%
+    dplyr:: filter(site_code == old_name & between(DT, start_date, end_date) )%>%
+    mutate(site_code = new_name)
+  
+  return(renamed_manual_df)
+}
+
+ 
+#unchanged sites
+manual_h_q_nochange = manual_h_q[!(manual_h_q$site_code %in% unique(rename_df$old_name)),]
+
+#Fixed and combine manual H/Q df
+h_q_df <- pmap_dfr(rename_df, change_name_manual)%>%
+  rbind(manual_h_q_nochange)%>%
+  select(H = H_cm, Q = Q_cfs,site_code )
+
+###
+
+#If sites were not split, run code below
+#h_q_df <- manual_h_q%>%
+#select(H = H_cm, Q = Q_cfs,site_code )
+
+#List sites that we want to calculate rating curve for
+site_list <- data.frame(site = c("FISH", "SAWM", "BLAK", "PENN", "BEAV", "BENN", "LBEA1", "SHEP1"))%>%
+  as_tibble()
+
+#using manual dataframe to create coefficients for each site
+manual_H_Q_rc <- pmap_dfr(site_list, create_rating_curve)
+
+#double check that modelled Q matches measured Q
+double_check_model <- manual_H_Q_rc%>%
+  ggplot()+
+  geom_point(aes(x= H, y = Q), color= "blue")+
+  geom_point(aes(x= H, y = Q_cfs), color= "red")+
+  geom_line(aes(x= H, y = Q_cfs), color= "green")+
+  theme_bw()+
+  facet_wrap(~site_code)
+
+plot(double_check_model)  
+  
+  
+```
+  
 
 
 
+### 15 min Q calculations
+```{r}
 
-double_check_stage_Q <- filter(stage_Q_test, site_code == "SAWM")%>%
+stage_Q_15min <- pmap_dfr(site_list, calc_Q_for_sensor_stage_15min)
+
+
+double_check_stage_Q <- filter(stage_Q_15min, site_code == "LBEA1")%>%
   ggplot()+
   geom_line(aes(x= DT, y = Q_cfs, group = site_code, color = flag_type))+
   scale_color_manual(values = flag_colors)+
   theme_bw()
 
-ggplotly(double_check_stage_Q)
+plot(double_check_stage_Q)
+
+
+
+###DANGER ZONE###
+
+#EXTRAPOLATED_stage_Q_15min <- pmap(site_list, EXTRAPOLATION_Q_sensor_15min)
+
+
+```
+
+
+### Daily Q calculations
+```{r}
+
+stage_Q_daily <- pmap_dfr(site_list, calc_Q_for_sensor_stage_daily)
+
+
+
+
+double_check_stage_Q <- filter(stage_Q_daily, site_code == "LBEA1")%>%
+  ggplot()+
+  geom_line(aes(x= date, y = Q_cfs, group = site_code, color = flag_type))+
+  scale_color_manual(values = flag_colors)+
+  theme_bw()
+
+plot(double_check_stage_Q)
+
+
+
+###DANGER ZONE###
+
+EXTRAPOLATED_stage_Q_daily <- pmap_dfr(site_list, EXTRAPOLATION_Q_sensor_daily)
+
+
+extrapolated_stage_Q <-
+  ggplot()+
+  geom_line(data= filter(stage_Q_daily, site_code == "SAWM"),aes(x= date, y = Q_cfs, group = site_code, color = "blue"))+
+  geom_line(data= filter(EXTRAPOLATED_stage_Q_daily, site_code == "SAWM"),aes(x= date, y = Q_cfs, group = site_code, color = "red"))+
+  scale_color_manual(values = flag_colors)+
+  theme_bw()
+
+plot(extrapolated_stage_Q)
 
 
 ```
