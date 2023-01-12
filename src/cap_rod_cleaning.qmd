@@ -1,17 +1,17 @@
 ---
-title: "cap rod cleaning"
+title: "Caprod Cleaning"
 format: html
 editor: visual
 author: "Sam Struthers"
 author-meta: "Sam Struthers"
 ---
 
-## Packages
+## *Packages*
 
 ```{r setup}
 require("knitr")
 #change to whatever your working directory is 
-opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study/")
+#opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study/")
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
@@ -20,9 +20,9 @@ library(plotly)
 
 ```
 
-## Correcting Functions
+## *Correcting Functions*
 
-DriftR package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder
+*'driftR` package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder:*
 
 ```{r}
 source("src/driftR_functions/dr_correctOne.R")
@@ -37,424 +37,372 @@ source("src/driftR_functions/parseTime.R")
 source("src/driftR_functions/sondeCal.R")
 source("src/driftR_functions/sondeClean.R")
 source("src/driftR_functions/sondeRaw.R")
-
 ```
 
-## Importing and Combining
+## *Importing and Combining*
 
-RULES:
+*RULES:*
 
-1.  All data must be in CSVs nested in the folders data/all_sites/
+1.  *All data must be in CSVs nested in the folders data/all_sites/*
 
-2.  All files must have naming convention: SITE\_#DATE#
+2.  *All files must have naming convention: SITE\_#DATE#*
 
-3.  All files must have same number of columns and column names
+3.  *All files must have same number of columns and column names*
 
-4.  All files must have the same DateTime format (can be adjusted below)
+4.  *All files must have the same DateTime format (can be adjusted below)*
 
-5.  Run all_data first to get what the pattern for gsub will be
+5.  *Run all_data first to get what the pattern for gsub will be*
 
-    1.  This is also a good way to test that none of your files are broken
+    1.  *This is also a good way to test that none of your files are broken*
 
-6.  Use plots to double check everything
+6.  *Use plots to double check everything*
 
-    1.  Use the plots to double check there are no zeros near site visits. If there are, remove them from the dataset manually! This will help the adjustments run correctly.
+    1.  *Use the plots to double check there are no zeros near site visits. If there are, remove them from the dataset manually! This will help the adjustments run correctly.*
 
-7.  Manual Measurements need the columns:
+7.  *Manual Measurements need the columns:*
 
-    1.  first_measurement_DT: 1st site visit datetime
+    1.  *first_measurement_DT: 1st site visit datetime*
 
-        1.  In same tz as sensor data
+        1.  *In same tz as sensor data*
 
-    2.  last_measurement_DT: 2nd site visit
+    2.  *last_measurement_DT: 2nd site visit*
 
-        1.  This becomes first_measurement_DT in next column
+        1.  *This becomes first_measurement_DT in next column*
 
-    3.  first_measurement_cm: 1st site visit stage measurement
+    3.  *first_measurement_cm: 1st site visit stage measurement*
 
-        1.  cm or whatever units you want the sensor in
+        1.  *cm or whatever units you want the sensor in*
 
-    4.  last_measurement_cm: 2nd site visit stage measurement
+    4.  *last_measurement_cm: 2nd site visit stage measurement*
 
-    5.  optional columns : Q_cfs and notes
+    5.  *optional columns : Q_cfs and notes*
 
-        1.  Q_cfs is read in a different chunk
+        1.  *Q_cfs is read in a different chunk*
 
 ```{r}
-#function testing to create one df with all caprod data
-read_and_combine <- function(folder_path, full_folder_path){
-  
-  # This ensures that version 2.0+ of the readr package (tidyverse) is being
-  # used, because it allows for reading multiple files
-  readr::local_edition(2) 
-  
-  # Read in all data files from all
-  all_data <- read_csv(
-    # Provide a vector/list of filenames to read
-    file = list.files(
-      path = folder_path,
-      # Search in all subfolders of `path` for csv files
-      recursive = TRUE,
-      # Use full filenames so R can find them
-      full.names = TRUE),
-    # Store the path to each csv in a "path" column
-    id = "path")
-  
-  # Now tidy up the dataset before returning it to the main workflow
-  cleaned_data <- all_data %>%
-    mutate(
-      # Create a new column with a shortened version of the path
-      site_code = gsub(pattern = full_folder_path,
-                     replacement = "",
-                     x = path),
-      # Extract just the folder name from this shortened version of the path
-      site_code = str_extract(string = site_code,
-      # Remove everything after the first bit of upper case text
-        pattern = "[A-Z]+"),
-      
-      DT =  as.POSIXct(datetime, format = "%m/%d/%Y %H:%M", tz = "MST")
-    )
-}
+# location of raw data files
+folder_path <- paste0(getwd(),"/data/all_sites_caprod_data")
 
-## All sites combined into 1 dataframe
-# change "" to the file path were all_sites is located
-
-stage_df <- read_and_combine(folder_path = "~/Repositories/cameron_peak_fire_study/data/all_sites_caprod_data",
-                                    full_folder_path = "C:/Users/Sam Struthers/OneDrive - Colostate/Documents/Repositories/cameron_peak_fire_study/data/all_sites_caprod_data/")%>%
-  
-  ##can add other columns to select if you want
-  
-  select(DT, site_code, wtrhgt__5)%>%
-  ## mutate column to correct units and name
+# combine all sites into one data frame:
+stage_df <- read_csv(list.files(folder_path, 
+                                recursive = TRUE, 
+                                full.names = TRUE), 
+                     id = "path") %>%
+  mutate(site_code = substr(path, nchar(path) - 17 + 1, nchar(path)),
+         site_code = substr(site_code, 1, 4),
+         DT =  as.POSIXct(datetime, format = "%m/%d/%Y %H:%M", tz = "MST")) %>%
+  select(DT, site_code, wtrhgt__5) %>%
+  # mutate column to correct units and name
   mutate(water_height_cm = wtrhgt__5 /10, 
         time =  format(DT, format = "%H:%M"), 
-        #in case function doesn't remove excess chars for site_code
+        # in case excess chars for site_code remain
         site_code = str_extract(string = site_code, 
-                                      pattern = "[A-Z]+"))%>%
-  #not required to save mm but can be nice to make sure everything is working correctly
+                                      pattern = "[A-Z]+")) %>%
+  # rename raw mm data
   dplyr ::rename(water_height_mm = wtrhgt__5)
+  
+##  FIELD STAGE MEASUREMENTS. SEE RULES FOR COLUMNS NAMES ##
+# change "field stage" to wherever manual values are stored:
+field_stage <- "data/manual_values_dec_2022.csv"
 
-
-
-#Pull in field measured values
-#change csv to whatever your manual values are store in 
-##SEE RULES FOR COLUMNS NAMES
-manual_measurements <- read.csv("data/manual_values_dec_2022.csv")%>%
- 
-      mutate(first_measurement_DT = as.POSIXct(first_measurement_DT, 
-      ##IF DTs are not reading correctly, you may need to adjust formats
-                                 format = "%m/%d/%Y %H:%M", tz = "MST"), 
-      
-             last_measurement_DT = as.POSIXct(last_measurement_DT, 
-      ##IF DTs are not reading correctly, you may need to adjust formats
-                                format = "%m/%d/%Y %H:%M", tz = "MST"))
-
+manual_measurements <- read.csv(field_stage) %>%
+  mutate(first_measurement_DT = as.POSIXct(first_measurement_DT, 
+                                           # adjust DT formatting if necessary
+                                           format = "%m/%d/%Y %H:%M", tz = "MST"), 
+         last_measurement_DT = as.POSIXct(last_measurement_DT, 
+                                          format = "%m/%d/%Y %H:%M", tz = "MST"))
 ```
 
-## Visual
+## *Visual*
 
--   check for missing data, weird dates, see if there are any 0s near sites
+-   *Check for missing data, weird dates, see if there are any 0s near site visits.*
 
 ```{r}
-master_visual <- stage_df%>%
-  ggplot(aes(x= DT, y = water_height_cm, color = site_code))+
+master_visual <- stage_df %>%
+  ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
   geom_line()
 plot(master_visual)
 
-indv_visual <- filter(stage_df, site_code == "SAWM")%>%
-  ggplot(aes(x= DT, y = water_height_cm, color = site_code))+
+indv_visual <- filter(stage_df, site_code == "SAWM") %>%
+  ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
   geom_line()
 plot(indv_visual)
 ```
 
-## Export uncleaned combined stage
+## *Export uncleaned stage across all sites*
 
 ```{r}
 write_csv(stage_df, "data/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
 ```
 
-# Field data adjustments:
+# *Field data adjustments*
 
-In broad strokes, these functions/loops will take the sensor data pulled in above and manual values measured in the field to attempt to correct sensor data to match up field data. Workflow overview:
+*In broad strokes, these functions/loops will take the sensor data pulled in above and manual values measured in the field to correct sensor data to match field data. Workflow overview:*
 
-1.  Subset sensor df by a first and second field measurement.
-2.  Step sensor up or down based on the difference between first field measurement and recorded values.
-3.  Create a time factor for each subset of data which will allow for the driftR package to correct for sensor drift
-4.  Use driftR functions to match up end of dataset with second field measurement.
+1.  *Subset the sensor data frame by each field measurement (i.e., each subset is bounded by two field measurements).*
+2.  *Step sensor reading up or down based on the difference between first field measurement and the sensor value.*
+3.  *Create a new column, time factor, for each subset of data which allows the `driftR` package to correct for sensor drift.*
+4.  *Use `driftR` functions to match up the end of the data set with last field measurement.*
 
-##Functions to subset and adjust stage values
+## *Functions to subset and adjust stage values*
 
 ```{r}
-##Function to adjust sensor stage values to match start measurement  
-  
-  
-  adjust_stage <- function(site_name,start_date, end_date, manual_start, manual_end){
-    stage_df_new<- stage_df%>%
-      #subset df by site and datetimes between site visits
-     dplyr::filter(stage_df$site_code %in% site_name)%>%
-     dplyr::filter(between(DT, start_date, end_date))%>%
-      #difference between manual measurement and the average of the first 4 measurements in the subset 
-    #ie value that sensor sees near first site visit
+# function to adjust sensor stage values to match the start measurement  
+
+  adjust_stage <- function(site_name, start_date, end_date,
+                           manual_start, manual_end) {
+    
+    stage_df_new <- stage_df %>%
+      # subset df by site and DTs between site visits
+     dplyr::filter(stage_df$site_code %in% site_name) %>%
+     dplyr::filter(between(DT, start_date, end_date)) %>%
+      # difference between the manual measurement and the average of 
+      # the first 4 sensor readings in the subset (i.e. the next 4
+      # sensor readings after the manual measurement)
       mutate(adjustment = manual_start - mean(head(water_height_cm, n = 4), na.rm = TRUE) , 
-             #adjust stage by adjustment difference
+             # adjust stage by adjustment difference
              adjusted_stage = water_height_cm + adjustment)
     
     return(stage_df_new)
     
-   
   }
   
-##Function to give dataset a time correction factor for each subset
-    dr_factor_subset <- function(site_name, start_date, end_date, manual_start, manual_end){
+# function to give dataset a time correction factor for each subset
+    dr_factor_subset <- function(site_name, start_date, end_date, 
+                                 manual_start, manual_end) {
       
-    factor_df <-stepped_df%>%
-      #subset df by site and datetimes between site visits
-     dplyr::filter(stepped_df$site_code %in% site_name)%>%
-     dplyr::filter(between(DT, start_date, end_date))%>%
-      #dr factor needs date/time to create time factor
+    factor_df <- stepped_df %>%
+      # subset df by site and DTs between site visits
+     dplyr::filter(stepped_df$site_code %in% site_name) %>%
+     dplyr::filter(between(DT, start_date, end_date)) %>%
+      # `dr_factor` needs DT to create the time factor
       mutate(time =  format(DT, format = "%H:%M"), 
-             date = as.Date(DT, format = "%Y-%m-%d"))%>%
-      #arranging subset seems to correct factor errors
-      arrange(DT)%>%
-      #creating time factor for subset of data
-      dr_factor(., corrFactor = corrFac, dateVar = date, timeVar = time, keepDateTime = TRUE )
-    
+             date = as.Date(DT, format = "%Y-%m-%d")) %>%
+      # arranging subset to correct any factor errors
+      arrange(DT) %>%
+      # create time factor for subset of data
+      dr_factor(., corrFactor = corrFac, dateVar = date, 
+                timeVar = time, keepDateTime = TRUE )
     
       return(factor_df)
+    
     }
     
-##Function to correct drift over a subset by looking at measured values and the previous 4
-## dataframe must already have corrFac added or it will not run
+# function to correct drift over a subset by looking at measured 
+# values and the previous four readings. data frame must have corrFac column to run
     
-    dr_correctOne_subset <- function(site_name, start_date, end_date, manual_end, manual_start){
+    dr_correctOne_subset <- function(site_name, start_date, end_date, 
+                                     manual_end, manual_start) {
       
-    corrected_df <-factor_df%>%
-     dplyr::filter(factor_df$site_code %in% site_name)%>%
+    corrected_df <- factor_df %>%
+     dplyr::filter(factor_df$site_code %in% site_name) %>%
      dplyr::filter(between(DT, start_date, end_date))
     
-    #average of the last 4 measurements in the subset becomes calVal
-    #ie value that sensor sees
+    # average of the last 4 measurements in the subset becomes 'calVal'
+    # ie value that the sensor sees
     
-    last_sensor_cm = mean(tail(corrected_df$adjusted_stage, n = 4),na.rm = TRUE)
+    last_sensor_cm = mean(tail(corrected_df$adjusted_stage, n = 4), na.rm = TRUE)
     
-     drift_corrected_df<- dr_correctOne(
-                                        #dataframe to correct
+     drift_corrected_df <- dr_correctOne(
+                    # dataframe to correct
                                         corrected_df,
-                                        #column that we will be correcting
+                    # column that we will be correcting
                                         sourceVar = adjusted_stage, 
-                                        #column that we are creating
+                    # column that we are creating
                                         cleanVar = corrected_stage_cm ,
-                                  #sensor value nearest to our manual measurement
+                    # sensor value nearest to our manual measurement
                                         calVal = last_sensor_cm , 
-                    #manual measurement that we want the subset of data to end on 
+                    # manual measurement that we want the subset of data to end on 
                                         calStd = manual_end , 
-                                  #time correction factor from dr_factor
+                    # time correction factor from dr_factor
                                         factorVar = corrFac)
     
       return(drift_corrected_df)
+     
   }
-  
-
-
- 
-
-
-
 ```
 
-## Preforming the adjustments
+## *Preforming the adjustments*
 
-Using the functions written above and pmap, we can map over the manual measurements df and preform the adjustments.
+*Using the functions written above and pmap, we can map over the manual measurements df and preform the adjustments.*
 
 ```{r}
-
-
-
-
-
-
-#Fit column names to match argument names in functions
-
-manual_measurements_for_func <- manual_measurements%>% 
-  select(site_name = site_code ,start_date = first_measurement_DT, end_date = last_measurement_DT, manual_start = first_measurement_cm, manual_end = last_measurement_cm)%>%
-  #NA values will break the functions, get rid of em!
-  na.omit()%>%
-  #pmap_dfr needs tibbles :)
+# fit column names to match argument names in functions
+manual_measurements_for_func <- manual_measurements %>% 
+  select(site_name = site_code, 
+         start_date = first_measurement_DT,
+         end_date = last_measurement_DT,
+         manual_start = first_measurement_cm, 
+         manual_end = last_measurement_cm) %>%
+  # NA values will break the functions, get rid of em!
+  na.omit() %>%
+  # pmap_dfr needs tibbles :)
   as_tibble()
 
+##PMAP FOR ADJUSTMENT FUNCTIONS!##
 
-
-
-
-##PMAP FOR ADJUSTMENT FUNCTIONS!
-
-#Steps df for each subset between site visits to match the first measurement (start measurement)
+# steps df for each subset between site visits to match the start measurement
 stepped_df <- pmap_dfr(manual_measurements_for_func, adjust_stage)
 
-# creates a time factor for each subset using the driftR factor function
+# creates a time factor for each subset using the `driftR` factor function
 factor_df <- pmap_dfr(manual_measurements_for_func, dr_factor_subset)
 
-
-#using factor and last 4 measurements from manual end ,corrects for drift so that manual end and the last measurement match up
-
+# using factor and last 4 measurements from manual end, corrects for drift so that the manual end and the end measurement match up
 corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
-
-
-
-
-  
 ```
 
-### Graphing to check work
+### *Graphing to check work*
 
 ```{r}
-  #change site names to whatever site you want to look at
-indv_corrected_df <- filter(corrected_df, site_code == "LBEA")
- indv_manual_measurements <- filter(manual_measurements_for_func, site_name == "LBEA")
+# change site names to whatever site you want to look at
+indv_corrected_df <- filter(corrected_df, 
+                            site_code == "LBEA")
+
+indv_manual_measurements <- filter(manual_measurements_for_func, 
+                                   site_name == "LBEA")
  
   
- indv_corrected_graph <- ggplot()+
-  geom_line(data = indv_corrected_df, aes( x= DT , y= water_height_cm), color= "red")+
-  geom_line(data = indv_corrected_df, aes( x= DT , y= corrected_stage_cm), color= "black")+
-  geom_line(data = indv_corrected_df, aes( x= DT , y= adjusted_stage), color= "green", alpha = .5)+
-  geom_point(data =  indv_manual_measurements, aes( x= start_date , y= manual_start), color = "blue")+
+ indv_corrected_graph <- ggplot() +
+  geom_line(data = indv_corrected_df, aes(x = DT , y = water_height_cm), 
+            color = "red") +
+  geom_line(data = indv_corrected_df, aes(x = DT , y = corrected_stage_cm), 
+            color = "black") +
+  geom_line(data = indv_corrected_df, aes(x = DT , y = adjusted_stage), 
+            color = "green", alpha = .5) +
+  geom_point(data = indv_manual_measurements, aes(x = start_date, 
+                                                  y = manual_start),
+             color = "blue") +
    theme_bw()
  
 #ggplotly(indv_corrected_graph)
 # ^Interactive graph^
  
 plot(indv_corrected_graph)
-
-
-
-
-
-
 ```
 
-## Splitting sites where caprod was moved
+## *Splitting sites where caprod was moved*
 
-LBEA and SHEP had to be moved midseason so they are now being split into LBEA1/2 and SHEP1/2
+*LBEA and SHEP had to be moved mid-season so they are now being split into LBEA 1/2 and SHEP 1/2*
 
-This section can be skipped if sensors did not move location thru the season
+*This section can be skipped if sensors do not move locations.*
 
 ```{r}
 
-# This dataframe contains the old names, new names and star/end dates for the name changes
-
-
+# This dataframe contains the old names, new names and start/end dates for the name changes
 rename_df <- data.frame(old_name = c("LBEA", "LBEA", "SHEP","SHEP"), 
                        new_name = c("LBEA1", "LBEA2", "SHEP1", "SHEP2"), 
-                       start_date = c("2022-05-01 12:00","2022-08-19 10:15","2022-05-01 12:00","2022-08-19 12:30"), 
-                       end_date= c("2022-08-19 10:00","2022-11-01 12:00","2022-08-17 15:15","2022-11-01 12:00"))%>% mutate(start_date = as.POSIXct(start_date, format = "%Y-%m-%d %H:%M", tz = "MST"),
-         end_date = as.POSIXct(end_date, format = "%Y-%m-%d %H:%M", tz = "MST"))
+                       start_date = c("2022-05-01 12:00", "2022-08-19 10:15", 
+                                      "2022-05-01 12:00", "2022-08-19 12:30"), 
+                       end_date= c("2022-08-19 10:00", "2022-11-01 12:00",
+                                   "2022-08-17 15:15", "2022-11-01 12:00")) %>% mutate(start_date = as.POSIXct(start_date, format = "%Y-%m-%d %H:%M", tz = "MST"),
+       end_date = as.POSIXct(end_date, format = "%Y-%m-%d %H:%M", tz = "MST"))
 
 ##################
-# If there are more moves, this can be written in as a csv with the same  column names and read in using the hashed out code below
+# If there are more moves in the future, this can be written in as a csv with the same  column names and read in using the hashed out code below:
 
 
-# rename_df <- read.csv("FILE_PATH_TO.CSV")%>% 
+# rename_df <- read.csv("FILE_PATH_TO.CSV") %>% 
 #mutate(start_date = as.POSIXct(start_date, format = "%Y-%m-%d %H:%M", tz = "MST"),
-#          end_date = as.POSIXct(end_date, format = "%Y-%m-%d %H:%M", tz = "MST"))
-
+#       end_date = as.POSIXct(end_date, format = "%Y-%m-%d %H:%M", tz = "MST"))
 ##################
 
-#Function changes site_code to new names in rename_df if between(start/end date)
-
-change_site_names <- function(old_name, new_name, start_date, end_date){
-  test_function <- corrected_df%>%
-    dplyr:: filter(site_code == old_name & between(DT, start_date, end_date) )%>%
+# function to change site_code to new names in rename_df if between start/end dates
+change_site_names <- function(old_name, new_name, start_date, end_date) {
+  
+  test_function <- corrected_df %>%
+    dplyr:: filter(site_code == old_name & between(DT, start_date, end_date)) %>%
     mutate(site_code = new_name)
   
   return(test_function)
+  
 }
 
-#all of the sites with no changes
+# rest of the sites with no changes to location
+non_name_changed_df = corrected_df[!(corrected_df$site_code %in% 
+                                       unique(rename_df$old_name)),]
 
-non_name_changed_df = corrected_df[!(corrected_df$site_code %in% unique(rename_df$old_name)),]
-
-#change site names
-corrected_df<- pmap_dfr(rename_df, change_site_names)%>%
-  #combine with unchanged df
+# change site names
+corrected_df<- pmap_dfr(rename_df, change_site_names) %>%
+  # combine with unchanged df
   rbind(non_name_changed_df)
 
-#Check that all the new names are in df and old names removed
+# check that all the new names are in the df and old names are removed
 unique(corrected_df$site_code)
-#If old names persist you may need to change the start/end dates so that all rows are included
 
-
+# if old names persist you may need to change the start/end dates so that all rows are included
 ```
 
-## Adding flags to 15min 
+## *Adding flags to 15 min*
 
-Flags were determined visually and compared to field notes about the streams.
+*Flags were determined visually and compared to field notes about the streams.*
 
-Flag names:
+*Flag names:*
 
--   PASS: Data looks good
+-   *PASS: Data looks good*
 
--   FAIL: Data is questionable, caution using it
+-   *FAIL: Data is questionable, caution using it*
 
--   CHANNEL: Channel changes occurred, stage may not be accurate
+-   *CHANNEL: Channel changes occurred, stage may not be accurate*
 
--   TREND: Magnitude of data is correct but data trends in an unintuitive way
+-   *TREND: Magnitude of data is correct but data trends un-intuitively*
 
--   VARIATION: Daily variation is questionable
+-   *VARIATION: Daily variation is questionable, use larger time step for safety*
 
-    -   use larger timestep for safety
-
--   Any additional: explain in notes
+-   *Any additional: Explained in notes*
 
 ```{r}
-
-#4 columns:
-#start_dt <- when flag starts
-#end_dt <- when flag ends
+# 4 columns:
+# start_dt <- when flag starts
+# end_dt <- when flag ends
       ## make sure start != end, will duplicate data
-#FLAG: flag code
-#notes: any notes about the flag code or field notes
-flag_values<- read.csv("data/flag_values_caprods_2022.csv")%>%
+# FLAG: flag code
+# notes: any notes about the flag code or field notes
+flag_values<- read.csv("data/flag_values_caprods_2022.csv") %>%
   mutate(start_dt = as.POSIXct(start_dt, format = "%m/%d/%Y %H:%M", tz = "MST"),
          end_dt = as.POSIXct(end_dt, format = "%m/%d/%Y %H:%M", tz = "MST"))
 
-#Subset data based on site/DTs in flag_values 
-#add flag codes and notes to df
-
-apply_flag <- function(site, FLAG, start_dt, end_dt, notes){
-correct_and_flagged_df <- corrected_df%>%
-  dplyr::filter(corrected_df$site_code %in% site)%>%
-  dplyr::filter(between(DT,start_dt, end_dt))%>%
+# subset data based on site/DTs in flag_values 
+# add flag codes and notes to df
+apply_flag <- function(site, FLAG, start_dt, end_dt, notes) {
+  
+correct_and_flagged_df <- corrected_df %>%
+  dplyr::filter(corrected_df$site_code %in% site) %>%
+  dplyr::filter(between(DT, start_dt, end_dt)) %>%
   mutate(flag_type = FLAG, 
          note = notes)
 
 return(correct_and_flagged_df)
   
 }
+
 #map over flag values df
 correct_and_flagged_df <- pmap_dfr(flag_values, apply_flag)
 
-#Colors to visualize site flags in plots
+# colors to visualize site flags in plots
+flag_colors <- c("PASS" = "green", 
+                 "FAIL" = "red", 
+                 "TREND" = "purple",
+                 "VARIATION"= "blue",
+                 "CHANNEL"= "orange") 
 
-flag_colors <- c("PASS" = "green", "FAIL" = "red", "TREND" = "purple", "VARIATION"= "blue", "CHANNEL"= "orange") 
-
-indv_site <- correct_and_flagged_df%>%
+indv_site <- correct_and_flagged_df %>%
   filter(site_code == "BLAK")
 
-indv_site_flags <- ggplot()+
-  geom_point(data = indv_site, aes(x = DT, y= corrected_stage_cm, color = flag_type ))+
-  scale_color_manual(values = flag_colors)+
+indv_site_flags <- ggplot() +
+  geom_point(data = indv_site, aes(x = DT, y = corrected_stage_cm,
+                                   color = flag_type )) +
+  scale_color_manual(values = flag_colors) +
   theme_bw()
                      
 plot(indv_site_flags)                     
-                    
-                     
 ```
 
-### Exporting 15min stage data
+### *Exporting 15 min stage data*
 
 ```{r}
-final_stage_df<- correct_and_flagged_df%>%
-  select(DT, site_code, 
+final_stage_df<- correct_and_flagged_df %>%
+  select(DT, 
+         site_code, 
          sensor_stage_mm = water_height_mm, 
          sensor_stage_cm = water_height_cm, 
          adjustment_cm = adjustment,
@@ -463,72 +411,72 @@ final_stage_df<- correct_and_flagged_df%>%
          corrected_stage_cm,
          flag_type, 
          notes = note,
-         date, time)
+         date, 
+         time)
 
-write.csv(final_stage_df, "data/Provisional_Q_stage_data/corrected_15min_stage_CPF_2022.csv")
+write.csv(final_stage_df,
+          "data/Provisional_Q_stage_data/corrected_15min_stage_CPF_2022.csv")
 
 ```
 
-## Computing daily averages
+## *Computing daily averages*
 
 ```{r}
-
-#Take mean for each created stage value
-
-daily_means_stage <- corrected_df%>%
-  select(water_height_cm, corrected_stage_cm, adjusted_stage, date, site_code)%>%
-  group_by(date, site_code)%>%
+# take mean for each created stage value
+daily_means_stage <- corrected_df %>%
+  select(water_height_cm, corrected_stage_cm, adjusted_stage, date, site_code) %>%
+  group_by(date, site_code) %>%
   dplyr:: summarise(mean_sensor_stage_cm = mean(water_height_cm),
          mean_adjusted_stage_cm = mean(adjusted_stage),
-         mean_corrected_stage_cm = mean(corrected_stage_cm))%>%
-  ungroup()%>%
-   ##IGNORE UNLESS YOU NEED TO MATCH GRAB SAMPLES UP TO SITES
+         mean_corrected_stage_cm = mean(corrected_stage_cm)) %>%
+  ungroup() %>%
+  ## IGNORE UNLESS YOU NEED TO MATCH GRAB SAMPLES UP TO SITES
   mutate(site_label = ifelse(site_code %in% c("LBEA1", "LBEA2"), "LBEA",
-                      ifelse(site_code %in% c("SHEP1", "SHEP2"), "SHEP",site_code)))
-  ##HASH OUT ABOVE IF NOT MATCHING SAMPLES AND SITES
+                      ifelse(site_code %in% c("SHEP1", "SHEP2"), "SHEP", 
+                             site_code)))
+  ## HASH OUT ABOVE IF NOT MATCHING SAMPLES AND SITES
 
-#Match up with FCW and ISCO Samples 
+# match up with FCW and ISCO Samples 
+site_labels <- c("FISH", "BEAV", "BENN", "SAWM", "PENN", "BLAK", "SHEP",
+                 "LBEA", "ROAR", "SAWM_ISCO", "FISH_ISCO", "LBEA_ISCO", 
+                 'BLAK_ISCO', "LBEAISCO", "BLAKISCO", "SAWMISCO", "FISHISCO" )
 
-site_labels <- c("FISH", "BEAV", "BENN", "SAWM", "PENN", "BLAK", "SHEP", "LBEA", "ROAR", "SAWM_ISCO", "FISH_ISCO", "LBEA_ISCO", 'BLAK_ISCO', "LBEAISCO", "BLAKISCO", "SAWMISCO", "FISHISCO" )
-
-#filter RMRS chemistry for sites where stage is measured
-
-cam_pk_chem <- read.csv("data/CamPkChem.csv")%>%
-  filter(Era == "FCW" | Era == "ISCO")%>%
-  dplyr::rename(site_label = SiteLabel)%>%
-  filter(site_label %in% site_labels)%>%
-  mutate( date  = as.Date(Date, format = "%d-%b-%y"), 
+# filter RMRS chemistry for sites where stage is measured
+cam_pk_chem <- read.csv("data/CamPkChem.csv") %>%
+  filter(Era == "FCW" | Era == "ISCO") %>%
+  dplyr::rename(site_label = SiteLabel) %>%
+  filter(site_label %in% site_labels) %>%
+  mutate( date = as.Date(Date, format = "%d-%b-%y"), 
           Year = year(date), 
-          dayofyear = yday(date))%>%
-  filter(Year >=2022)%>%
-  filter(SampleType %in% c("NORM", "ISCO"))%>%
-  select(date, site_label, Era, EraSamp, dayofyear, SampleType)%>%
+          dayofyear = yday(date)) %>%
+  filter(Year >= 2022) %>%
+  filter(SampleType %in% c("NORM", "ISCO")) %>%
+  select(date, site_label, Era, EraSamp, dayofyear, SampleType) %>%
 mutate(site_label=ifelse(site_label %in% c('FISH','FISH_ISCO'),"FISH",
-                   ifelse(site_label %in% c('LBEA','LBEA_ISCO', "LBEAISCO"),"LBEA",
-                   ifelse(site_label %in% c('SAWM','SAWM_ISCO'),"SAWM",
-                   ifelse(site_label %in% c('BLAK','BLAK_ISCO'),"BLAK",site_label )))))
+                  ifelse(site_label %in% c('LBEA','LBEA_ISCO', "LBEAISCO"),"LBEA",
+                  ifelse(site_label %in% c('SAWM','SAWM_ISCO'),"SAWM",
+                  ifelse(site_label %in% c('BLAK','BLAK_ISCO'),"BLAK", site_label
+                         )))))
 
-#group into sites and sample type, 
-#get # of sampels per date
-
-sample_by_day <- cam_pk_chem%>%
-  group_by(site_label, date, SampleType)%>%
-  dplyr::summarise( count = n())%>%
+# group into sites and sample type, 
+# get number of samples per date
+sample_by_day <- cam_pk_chem %>%
+  group_by(site_label, date, SampleType) %>%
+  dplyr::summarise(count = n()) %>%
   ungroup()
 
-#create df of sites and codes for data flag but on a daily timescale
-
-flag_daily_values<- flag_values%>%
+# create df of sites and their codes for data flag, but on a daily timescale
+flag_daily_values<- flag_values %>%
   mutate(start_date = as.Date(start_dt), 
-         end_date = as.Date(end_dt))%>%
+         end_date = as.Date(end_dt)) %>%
   select(site, FLAG, start_date, end_date, notes)
 
-#changed apply_flag to work on daily timestep rather than by DT
-
-apply_flag_daily <- function(site, FLAG, start_date, end_date, notes){
-correct_and_flagged_daily_df <- daily_means_stage%>%
-  dplyr::filter(date>=start_date & date < end_date)%>%
-  dplyr::filter(site_code == site)%>%
+# change apply_flag to work on daily timestep rather than by DT
+apply_flag_daily <- function(site, FLAG, start_date, end_date, notes) {
+  
+correct_and_flagged_daily_df <- daily_means_stage %>%
+  dplyr::filter(date >= start_date & date < end_date) %>%
+  dplyr::filter(site_code == site) %>%
   mutate(flag_type = FLAG, 
          note = notes)
 
@@ -536,56 +484,62 @@ return(correct_and_flagged_daily_df)
   
 }
 
-
-
-## This may induce duplicates
+# this may induce duplicates!
 correct_and_flagged_daily_df <- pmap_dfr(flag_daily_values, apply_flag_daily)
 
-  
+# join samples by date and stage data frames
+daily_means_stage_w_samples <- correct_and_flagged_daily_df %>%
+  left_join(select(sample_by_day, 
+                   c(site_label, date, count, SampleType)), 
+            by = c("site_label", "date"))
 
-
-#join samples by date and stage DFs
-daily_means_stage_w_samples <- correct_and_flagged_daily_df%>%
-  left_join( select(sample_by_day, c(site_label, date, count,SampleType )), by = c("site_label", "date") )
-
-
-#plot to make sure it looks correct/ no data is missing. 
-sample_plot <- filter(daily_means_stage_w_samples, site_code == "FISH")%>%
-  ggplot()+
-  geom_line(aes(x= date, y = mean_corrected_stage_cm, group = site_code, color = flag_type))+
-  geom_line(aes(x= date, y = mean_sensor_stage_cm, group = site_code, color = flag_type))+
-  scale_color_manual(values = flag_colors)+
-  #geom_line(aes(x=date, y = mean_corrected_stage_cm, color = "red" ))+
-  geom_point(aes(x= date, y = count, color = "grey" ))
+# plot to make sure everything looks correct and that no data is missing. 
+sample_plot <- filter(daily_means_stage_w_samples, site_code == "FISH") %>%
+  ggplot() +
+  geom_line(aes(x = date, y = mean_corrected_stage_cm, group = site_code, 
+                color = flag_type)) +
+  geom_line(aes(x = date, y = mean_sensor_stage_cm, group = site_code, 
+                color = flag_type)) +
+  scale_color_manual(values = flag_colors) +
+  # geom_line(aes(x = date, y = mean_corrected_stage_cm, 
+  # color = "red" ))+
+  geom_point(aes(x = date, y = count,
+                 color = "grey"))
 
 plot(sample_plot)
-
 ```
 
-## Exporting corrected daily means data
+## *Exporting corrected daily means data*
 
 ```{r}
+# write daily averages file matched up with samples
+final_daily_means_stage <- daily_means_stage_w_samples %>%
+  select(date, 
+         site_code,
+         mean_sensor_stage_cm,
+         mean_adjusted_stage_cm,
+         mean_corrected_stage_cm,
+         SampleType,
+         sampleCount = count,
+         flag_type, 
+         note, 
+         site_label)
 
-#Write daily averages file matched up with sample #
-
-final_daily_means_stage <- daily_means_stage_w_samples%>%
-  select(date,site_code, mean_sensor_stage_cm, mean_adjusted_stage_cm, mean_corrected_stage_cm,SampleType ,sampleCount = count, flag_type, note, site_label)
-
-write_csv(final_daily_means_stage, "data/Provisional_Q_stage_data/stage_daily_mean_and_samples_cleaned.csv")
-
-
-
+write_csv(final_daily_means_stage, 
+          "data/Provisional_Q_stage_data/stage_daily_mean_and_samples_cleaned.csv")
 ```
 
-# Calculating Q
+# *Calculating Q*
 
-This section contains 2 ways to calculate rating curves: 1. For datasets where there are few measurements, the function Q \~ (a\*H)\^b
+*This section contains two ways to calculate rating curves:*
 
-2.  For datasets with more Q/stage measurements, the package "bdrc" may be a more accurate solution This package calculates more error guidelines but takes a while to run.
+1.  *For data sets where there are few measurements, the function Q \~ (a\*H)\^b.*
 
-### Playing with rating curve package 'bdrc'
+2.  *For data sets with more Q/stage measurements, the package `bdrc` may be a more accurate solution. This package calculates more error guidelines but it takes a while to run.*
 
-FOR LARGER DATASETS USE THIS PACKAGE. NEEDS FUNCTION DEVELOPMENT TO MAP THROUGH MULTIPLE SITES CODE IN CHUNK IS EXAMPLE DATASET PROVIDED WITH PACKAGE
+### *Playing with rating curve package `bdrc`*
+
+*FOR LARGER DATASETS USE THIS PACKAGE. NEEDS FUNCTION DEVELOPMENT TO MAP THROUGH MULTIPLE SITES. THE CODE IN BELOW CHUNK IS USING AN EXAMPLE DATASET PROVIDED WITH THE PACKAGE.*
 
 ```{r}
 
@@ -593,171 +547,167 @@ library("bdrc")
 
 data(krokfors)
 
-gplm.fit <- gplm(Q~W,krokfors)
+gplm.fit <- gplm(Q ~ W, krokfors)
 
 summary(gplm.fit)
 
- plot(gplm.fit)
+plot(gplm.fit)
 
 ```
 
-## Functions for Q calculations
+## *Functions for Q calculations*
 
-Functions:
+1.  *create_rating_curve*
 
--   create_rating_curve
+2.  *calc_Q\_for_sensor_stage_15min*
 
--   calc_Q\_for_sensor_stage_15min
+3.  *calc_Q\_for_sensor_stage_daily*
 
--   calc_Q\_for_sensor_stage_daily
+4.  *EXTRAPOLATION_Q\_sensor_15min*
 
--   EXTRAPOLATION_Q\_sensor_15min
-
--   EXTRAPOLATION_Q\_sensor_daily
+5.  *EXTRAPOLATION_Q\_sensor_daily*
 
 ```{r}
-
-
-create_rating_curve <- function(site){
+create_rating_curve <- function(site) {
   
-  site_manual_h_q <- h_q_df%>%
-    dplyr::filter(site_code == site)%>%
+  site_manual_h_q <- h_q_df %>%
+    dplyr::filter(site_code == site) %>%
     mutate(logH = log10(H),
            logQ = log10(Q))
   
-  
   # create linear model based on log of both functions
-  # Q = m*H + b
-  rc_lm <- lm(logQ ~ logH, data = site_manual_h_q )
+  # Q = m * H + b
+  rc_lm <- lm(logQ ~ logH, data = site_manual_h_q)
   
-  #summary of lm created
-  #this is where coefficients will be pulled from
+  # summary of lm created
+  # this is where coefficients will be pulled from
   
-  #Intercept == b
-  #logH == a
+  # intercept == b
+  # logH == a
   rc_summary <- summary(rc_lm)
   
-  #pulling coefficients in to manual DF
-    site_manual_h_q<- site_manual_h_q%>%
-  mutate(
+  # pulling coefficients in to manual data frame
+    site_manual_h_q <- site_manual_h_q %>%
+      mutate(
          # translating coefficient back into non log scale
-         a = (10^(rc_summary$coefficients[1,1])),
+         a = (10 ^ (rc_summary$coefficients[1,1])),
          # already in non log scale 
            b = rc_summary$coefficients[2,1],
-         #r^2 value
+         # r^2 value
            r2 = rc_summary$r.squared,
-         #using calculated coefficuient on manual H values to check for accuracy
-         Q_cfs = (a*(H)^b) )
+         # using calculated coefficuient on manual H values to check for accuracy
+         Q_cfs = (a*(H)^b))
 
   return(site_manual_h_q)
+    
 }
 
-
-
-calc_Q_for_sensor_stage_15min <- function(site){
+calc_Q_for_sensor_stage_15min <- function(site) {
   
-  site_rc <- manual_H_Q_rc%>%
+  site_rc <- manual_H_Q_rc %>%
     dplyr::filter(site_code == site)
   
-  #filter corrected stage df for site
-   stage_Q_df <- final_stage_df%>%
-     dplyr::filter(site_code == site)%>%
-     #grab a, b, c and sigma for the given site from rc summary
-     mutate( a = site_rc$a[1],
-           b = site_rc$b[1],
-           r2 = site_rc$r2[1],
-            #calculate Q for the site based on a,b,c and stage given
+  # filter corrected stage df for site
+   stage_Q_df <- final_stage_df %>%
+     dplyr::filter(site_code == site) %>%
+     # grab a, b, c and sigma for the given site from rc summary
+     mutate(a = site_rc$a[1],
+            b = site_rc$b[1],
+            r2 = site_rc$r2[1],
+            # calculate Q for the site based on a,b,c and stage given
             Q_cfs = 
-              #If the stage is below the lowest stage where Q was measured, make it the lowest Q value measured
-              #extrapolation with this few of values is unwise
-              ifelse(corrected_stage_cm < min(site_rc$H),  min(site_rc$Q),
-             #Similar Idea to above but with max stage measured        
-              ifelse(corrected_stage_cm >max(site_rc$H),  max(site_rc$Q),
-             #if it within the bounds of measured stage values, use a, b to calc Q        
-                     
-     (a*(corrected_stage_cm)^b))))
-  
+              # if the stage is below the lowest stage where Q was measured, 
+              # make it the lowest Q value measured; extrapolation with this 
+              # few field Q's is unwise
+              ifelse(corrected_stage_cm < min(site_rc$H), min(site_rc$Q),
+             # similar idea to above but with max stage measured        
+              ifelse(corrected_stage_cm > max(site_rc$H), max(site_rc$Q),
+             # if within the bounds of measured stage values, use a & b to calc Q 
+                    (a*(corrected_stage_cm)^b))))
   
 return(stage_Q_df)
+   
 }
 
-calc_Q_for_sensor_stage_daily <- function(site){
-  #subset manual data by site
-  site_rc <- manual_H_Q_rc%>%
+calc_Q_for_sensor_stage_daily <- function(site) {
+  # subset manual data by site
+  site_rc <- manual_H_Q_rc %>%
     dplyr::filter(site_code == site)
   
-  #filter corrected stage df for site
-   daily_stage_Q_df <- final_daily_means_stage%>%
-     dplyr::filter(site_code == site)%>%
-     #grab a, b, c and sigma for the given site from rc summary
-     mutate( a = site_rc$a[1],
+  # filter corrected stage df for site
+  daily_stage_Q_df <- final_daily_means_stage %>%
+    dplyr::filter(site_code == site) %>%
+    # grab a, b, c and sigma for the given site from rc summary
+    mutate(a = site_rc$a[1],
            b = site_rc$b[1],
            r2 = site_rc$r2[1],
-            #calculate Q for the site based on a,b,c and stage given
-            Q_cfs = 
-              #If the stage is below the lowest stage where Q was measured, make it the lowest Q value measured
-              #extrapolation with this few of values is unwise
-              ifelse(mean_corrected_stage_cm < min(site_rc$H),  min(site_rc$Q),
-             #Similar Idea to above but with max stage measured        
-              ifelse(mean_corrected_stage_cm >max(site_rc$H),  max(site_rc$Q),
-             #if it within the bounds of measured stage values, use a, b to calc Q        
-                     
-     (a*(mean_corrected_stage_cm)^b))))
-  
+          # calculate Q for the site based on a, b, c and stage given
+          Q_cfs = 
+             # if the stage is below the lowest stage where Q was measured, 
+             # make it the lowest Q value measured; extrapolation with this 
+             # few field Q's is unwise
+              ifelse(mean_corrected_stage_cm < min(site_rc$H), min(site_rc$Q),
+             # similar Idea to above but with max stage measured        
+              ifelse(mean_corrected_stage_cm >max(site_rc$H), max(site_rc$Q),
+             # if within the bounds of measured stage values, use a & b to calc Q 
+                    (a*(mean_corrected_stage_cm)^b))))
   
 return(daily_stage_Q_df)
+  
 }
 
 
-EXTRAPOLATION_Q_sensor_15min <- function(site){
-  #subset manual data by site
-  site_rc <- manual_H_Q_rc%>%
+EXTRAPOLATION_Q_sensor_15min <- function(site) {
+  
+  # subset manual data by site
+  site_rc <- manual_H_Q_rc %>%
     dplyr::filter(site_code == site)
   
-  #filter corrected stage df for site
-   extrapolated_stage_Q_df <- final_stage_df%>%
-     dplyr::filter(site_code == site)%>%
-     #grab a, b, c and sigma for the given site from rc summary
-     mutate( a = site_rc$a[1],
-           b = site_rc$b[1],
-           r2 = site_rc$r2[1],
-            #calculate Q for the site based on a,b,c and stage given
+   # filter corrected stage df for site
+   extrapolated_stage_Q_df <- final_stage_df %>%
+     dplyr::filter(site_code == site) %>%
+     # grab a, b, c and sigma for the given site from rc summary
+     mutate(a = site_rc$a[1],
+            b = site_rc$b[1],
+            r2 = site_rc$r2[1],
+            # calculate Q for the site based on a, b, c and stage given
             Q_cfs = (a*(corrected_stage_cm)^b))
   
-  
 return(extrapolated_stage_Q_df)
+   
 }
 
-EXTRAPOLATION_Q_sensor_daily <- function(site){
-  #subset manual data by site
-  site_rc <- manual_H_Q_rc%>%
+EXTRAPOLATION_Q_sensor_daily <- function(site) {
+  
+  # subset manual data by site
+  site_rc <- manual_H_Q_rc %>%
     dplyr::filter(site_code == site)
   
-  #filter corrected stage df for site
+   # filter corrected stage df for site
    daily_extrapolated_stage_Q_df <- final_daily_means_stage%>%
      dplyr::filter(site_code == site)%>%
-     #grab a, b, c and sigma for the given site from rc summary
-     mutate( a = site_rc$a[1],
-           b = site_rc$b[1],
-           r2 = site_rc$r2[1],
-            #calculate Q for the site based on a,b,c and stage given
+     # grab a, b, c and sigma for the given site from rc summary
+     mutate(a = site_rc$a[1],
+            b = site_rc$b[1],
+            r2 = site_rc$r2[1],
+            # calculate Q for the site based on a,b,c and stage given
             Q_cfs = (a*(mean_corrected_stage_cm)^b))
   
-  
 return(daily_extrapolated_stage_Q_df)
+   
 }
 
 
 
 ```
 
-## Doing Q calculations
+## *Doing Q calculations*
 
 Reading in manual measurements and bringing in final_stage_df
 
 Steps:
 
-1.   Run through all manual measurements to create rating curve model and save coefficients
+1.  Run through all manual measurements to create a rating curve model and save coefficients
 
 2.  Double check that measured and modeled Q are in acceptable ranges
 
@@ -765,157 +715,148 @@ Steps:
 
     2.  USE BEST JUDGEMENT HERE
 
-3.  Run modeled rating curves over sensor stage at 15min interval and daily interval
+3.  Run modeled rating curves over sensor stage at 15 min interval and daily interval
 
     1.  Q IS BOUNDED AT UPPER AND LOWER MANUAL MEASUREMENTS.
 
-    2.  IF Q IS DESIRED TO BE EXTRAPOLATED, USE EXTRAPOLATION_Q\_sensor_15min and EXTRAPOLATION_Q\_sensor_daily (not recommended)
+    2.  IF Q IS DESIRED TO BE EXTRAPOLATED, USE EXTRAPOLATION_Q\_sensor_15min and EXTRAPOLATION_Q\_sensor_daily (**not recommended**)
 
 ### Manual stage/Q import, cleaning and model creation
 
 ```{r}
-
 #Import csv with measurement DT, stage H and measured Q
-
-manual_h_q <- read.csv("data/manual_stage_Q_jan2023.csv")%>%
-  mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M", tz = "MST"))%>%
+manual_h_q <- read.csv("data/manual_stage_Q_jan2023.csv") %>%
+  mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M", tz = "MST")) %>%
   na.omit(Q_cfs)
 
-
 #########################
-##If site was split can use this section
-change_name_manual <-function(old_name, new_name, start_date, end_date){
-  renamed_manual_df <- manual_h_q%>%
-    dplyr:: filter(site_code == old_name & between(DT, start_date, end_date) )%>%
+# if site was split, use this section
+change_name_manual <-function(old_name, new_name, start_date, end_date) {
+ 
+  renamed_manual_df <- manual_h_q %>%
+    dplyr:: filter(site_code == old_name & between(DT, start_date, end_date) ) %>%
     mutate(site_code = new_name)
   
   return(renamed_manual_df)
+  
 }
 
- 
-#unchanged sites
-manual_h_q_nochange = manual_h_q[!(manual_h_q$site_code %in% unique(rename_df$old_name)),]
+# unchanged sites
+manual_h_q_nochange = manual_h_q[!(manual_h_q$site_code %in% 
+                                     unique(rename_df$old_name)),]
 
-#Fixed and combine manual H/Q df
-h_q_df <- pmap_dfr(rename_df, change_name_manual)%>%
-  rbind(manual_h_q_nochange)%>%
-  select(H = H_cm, Q = Q_cfs,site_code )
-
+# fix and combine manual H/Q df
+h_q_df <- pmap_dfr(rename_df, change_name_manual) %>%
+  rbind(manual_h_q_nochange) %>%
+  select(H = H_cm, Q = Q_cfs, site_code )
 ###############################
 
 
-#If sites were not split, run code below
-#h_q_df <- manual_h_q%>%
-#select(H = H_cm, Q = Q_cfs,site_code )
+# if sites were not split, run code below
+# h_q_df <- manual_h_q %>%
+# select(H = H_cm, Q = Q_cfs,site_code)
 
-#List sites that we want to calculate rating curve for
-site_list <- data.frame(site = c("FISH", "SAWM", "BLAK", "PENN", "BEAV", "BENN", "LBEA1", "SHEP1"))%>%
+# list sites that we want to calculate rating curve for
+site_list <- data.frame(site = c("FISH", "SAWM", "BLAK", "PENN", 
+                                 "BEAV", "BENN", "LBEA1", "SHEP1")) %>%
   as_tibble()
 
-#using manual dataframe to create coefficients for each site
+# using manual dataframe to create coefficients for each site
 manual_H_Q_rc <- pmap_dfr(site_list, create_rating_curve)
 
-#double check that modelled Q matches measured Q
-double_check_model <- manual_H_Q_rc%>%
-  ggplot()+
-  geom_point(aes(x= H, y = Q), color= "blue")+
-  geom_point(aes(x= H, y = Q_cfs), color= "red")+
-  geom_line(aes(x= H, y = Q_cfs), color= "green")+
-  theme_bw()+
+# double check that modelled Q matches measured Q
+double_check_model <- manual_H_Q_rc %>%
+  ggplot() +
+  geom_point(aes(x = H, y = Q), color = "blue") +
+  geom_point(aes(x = H, y = Q_cfs), color = "red") +
+  geom_line(aes(x = H, y = Q_cfs), color = "green") +
+  theme_bw() +
   facet_wrap(~site_code)
 
 plot(double_check_model)  
-  
-  
 ```
 
-### 15 min Q calculations
+### *15 min Q calculations*
 
 ```{r}
-#calculate bounded Q for 15min data for all sites in site_list
+# calculate bounded Q for 15min data for all sites in site_list
 stage_Q_15min <- pmap_dfr(site_list, calc_Q_for_sensor_stage_15min)
 
-#view indv sites in plot
-double_check_stage_Q <- filter(stage_Q_15min, site_code == "LBEA1")%>%
-  ggplot()+
-  geom_line(aes(x= DT, y = Q_cfs, group = site_code, color = flag_type))+
-  scale_color_manual(values = flag_colors)+
+# view indv sites in plot
+double_check_stage_Q <- filter(stage_Q_15min, site_code == "LBEA1") %>%
+  ggplot() +
+  geom_line(aes(x = DT, y = Q_cfs, group = site_code, color = flag_type)) +
+  scale_color_manual(values = flag_colors) +
   theme_bw()
 
 plot(double_check_stage_Q)
 
-
-
-###EXTRAPOLATION DANGER ZONE###
-#USE EXTRAPOLATED AT OWN RISK, ERROR MAY BE PROPEGATED
-
+### EXTRAPOLATION DANGER ZONE ###
+# USE EXTRAPOLATED AT OWN RISK, ERROR MAY BE PROPAGATED
 EXTRAPOLATED_stage_Q_15min <- pmap_dfr(site_list, EXTRAPOLATION_Q_sensor_15min)
 
 extrapolated_stage_Q <-
-  ggplot()+
-  geom_line(data= filter(stage_Q_15min , site_code == "SAWM"),aes(x= DT, y = Q_cfs, color = "blue"))+
-  geom_line(data= filter(EXTRAPOLATED_stage_Q_15min, site_code == "SAWM"),aes(x=DT, y = Q_cfs, color = "red"))+
+  ggplot() +
+  geom_line(data = filter(stage_Q_15min , site_code == "SAWM"), 
+            aes(x = DT, y = Q_cfs, color = "blue")) +
+  geom_line(data = filter(EXTRAPOLATED_stage_Q_15min, site_code == "SAWM"),
+            aes(x = DT, y = Q_cfs, color = "red")) +
   #scale_color_manual(values = flag_colors)+
   theme_bw()
 
 ggplotly(extrapolated_stage_Q)
-
-
 ```
 
-### Daily Q calculations
+### *Daily Q calculations*
 
 ```{r}
-#calculate bounded Q for daily data for all sites in site_list
+# calculate bounded Q for daily data for all sites in site_list
 stage_Q_daily <- pmap_dfr(site_list, calc_Q_for_sensor_stage_daily)
 
-
-
-#view all sites in plotly
-double_check_stage_Q <- stage_Q_daily%>%
-  ggplot()+
-  geom_line(aes(x= date, y = Q_cfs, group = site_code, color = site_code))+
-  # scale_color_manual(values = flag_colors)+
+# view all sites in plotly
+double_check_stage_Q <- stage_Q_daily %>%
+  ggplot() +
+  geom_line(aes(x = date, y = Q_cfs, group = site_code, color = site_code)) +
+  # scale_color_manual(values = flag_colors) +
   theme_bw()
-
 
 ggplotly(double_check_stage_Q)
 
-
-
-###EXTRAPOLATION DANGER ZONE###
-#USE EXTRAPOLATED AT OWN RISK, ERROR MAY BE PROPEGATED
+### EXTRAPOLATION DANGER ZONE ###
+# USE EXTRAPOLATED AT OWN RISK, ERROR MAY BE PROPAGATED
 
 EXTRAPOLATED_stage_Q_daily <- pmap_dfr(site_list, EXTRAPOLATION_Q_sensor_daily)
 
-
 extrapolated_stage_Q <-
-  ggplot()+
-  geom_line(data= filter(stage_Q_daily, site_code == "SHEP1"),aes(x= date, y = Q_cfs, color = "blue"))+
-  geom_line(data= filter(EXTRAPOLATED_stage_Q_daily, site_code == "SHEP1"),aes(x= date, y = Q_cfs, color = "red"))+
-  #scale_color_manual(values = flag_colors)+
+  ggplot() +
+  geom_line(data = filter(stage_Q_daily, site_code == "SHEP1"),
+            aes(x = date, y = Q_cfs, color = "blue")) +
+  geom_line(data = filter(EXTRAPOLATED_stage_Q_daily, site_code == "SHEP1"),
+            aes(x = date, y = Q_cfs, color = "red")) +
+  # scale_color_manual(values = flag_colors) +
   theme_bw()
 
 ggplotly(extrapolated_stage_Q)
-
-
 ```
 
-# Exporting Q files
+# *Exporting Q files*
 
-Save into folder "Provisional_Q\_stage_data"
+*Save into folder "Provisional_Q\_stage_data"*
 
 ```{r}
+folder <- "data/Provisional_Q_stage_data/"
 
-write_csv(stage_Q_15min, "data/Provisional_Q_stage_data/stage_Q_15min_CPF2022.csv")
+write_csv(stage_Q_15min, 
+          paste0(folder, "stage_Q_15min_CPF2022.csv"))
 
-write_csv(stage_Q_daily, "data/Provisional_Q_stage_data/stage_Q_15min_CPF2022.csv")
+write_csv(stage_Q_daily, 
+          paste0(folder, "stage_Q_15min_CPF2022.csv"))
 
-write_csv(EXTRAPOLATED_stage_Q_15min , "data/Provisional_Q_stage_data/EXTRAPOLATED_stage_Q_15min_CPF2022.csv")
+write_csv(EXTRAPOLATED_stage_Q_15min, 
+          paste0(folder, "EXTRAPOLATED_stage_Q_15min_CPF2022.csv"))
 
-write_csv(EXTRAPOLATED_stage_Q_daily , "data/Provisional_Q_stage_data/EXTRAPOLATED_stage_Q_daily_CPF2022.csv")
-
-
+write_csv(EXTRAPOLATED_stage_Q_daily, 
+          paste0(folder, "EXTRAPOLATED_stage_Q_daily_CPF2022.csv"))
 ```
 
-End
+*End*
