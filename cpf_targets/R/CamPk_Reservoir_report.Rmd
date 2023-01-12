@@ -35,7 +35,7 @@ summary(campaign_yr_breakdown)
 # breaks down the number of unique chla samples per site and per year
 summary(unique_chla)
 # Breaks down the number of sampling days per season that a site was mesotrophic (chla>2.6) or eutrophic (chla >8). It also displays the percent of sampling days in this classification  
-summary(days_percent_meso)
+summary(days_percent_meso_eutrophic)
 ```
 
 # Longitudinal Plots

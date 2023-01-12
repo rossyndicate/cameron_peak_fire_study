@@ -126,7 +126,6 @@ import_res_chem <- function(out_path){
   return(reservoir_chemistry)
 }
 
-
 ##Sample Determination
 #this function breaks down all the samples taken in the last two years into 3 sampling campaigns 
 sample_determination <- function(total_chem_file_path){
@@ -138,14 +137,14 @@ sample_determination <- function(total_chem_file_path){
 #Determining number of Samples....
 
 sample_breakdown <- read.csv(total_chem_file_path)%>%
-  select(Date, SiteLabel ,ChlA)%>%
+  dplyr::select(Date, SiteLabel ,ChlA)%>%
   mutate(Date = as.Date.character(Date,format = "%d-%b-%y"),
-         yr = year(Date),
+         yr = lubridate::year(Date),
          campaign = ifelse(SiteLabel %in% reservoir_sites, "Reservoir", 
                            ifelse(SiteLabel %in% ISCO, "ISCO",
                                   ifelse(SiteLabel %in% mainstem_sites, "Mainstem", "Tributary")) ))%>%
   #filter for the years that the ROSS lab and RMRS sampled post fire
-  filter(yr >= "2021")
+  dplyr::filter(yr >= "2021")
 
 
 return(sample_breakdown)
@@ -181,18 +180,18 @@ unique_chla_fun <- function(sample_breakdown){
 
 eu_meso_calc <- function(res_chem_df){
   #calc the number of days meso
-  days_meso <- filter(reservoir_chemistry, ChlA >= 2.6 &ChlA <= 8)%>%
+  days_meso <- filter(res_chem_df, ChlA >= 2.6 &ChlA <= 8)%>%
     group_by(site_code, Year)%>%
     summarise(days_meso = n())%>%
     ungroup()
   #calc the number of days eutrophic
-  days_eu <- filter(reservoir_chemistry, ChlA >= 8)%>%
+  days_eu <- filter(res_chem_df, ChlA >= 8)%>%
     group_by(site_code, Year)%>%
     summarise(days_eu = n())%>%
     ungroup()
   #calc mean chla and then join with days meso/eu
   
-  days_meso_eu <- reservoir_chemistry%>%
+  days_meso_eu <- res_chem_df%>%
     select(Date, ChlA, Year, site_code)%>%
     na.omit()%>%
     group_by(site_code, Year)%>%
@@ -212,11 +211,14 @@ eu_meso_calc <- function(res_chem_df){
 
 longitudinal_graphs <- function(res_chem_df, choosen_dates_chambers, choosen_dates_southfork, choosen_dates_mainstem){
   
+  choosen_dates_chambers <- as.Date(choosen_dates_chambers)
+  choosen_dates_southfork <- as.Date(choosen_dates_southfork)
+  choosen_dates_mainstem <- as.Date(choosen_dates_mainstem)
   #chambers dataframe
   chambers_longitudinal <- res_chem_df %>%
     dplyr::filter(!is.na(ChlA)) %>%
     dplyr::filter(site_code %in% c("JOEI", "JOER", "CBRR", "CBRI", "CHD")) %>%
-    dplyr::filter(Date %in% choosen_dates)%>%
+    dplyr::filter(Date %in% choosen_dates_chambers)%>%
     mutate(Date=as.character(Date),
            location_type = ifelse(Location == "Outflow"|Location =="Inflow", "Stream", "Reservoir"))
   
@@ -225,7 +227,7 @@ longitudinal_graphs <- function(res_chem_df, choosen_dates_chambers, choosen_dat
   SF_longitudinal <- res_chem_df %>%
     dplyr::filter(!is.na(ChlA)) %>%
     dplyr::filter(site_code %in% c("COMI", "COMR", "COMO", "HORI", "HORR", "HORO", "BEAV", "SFM")) %>%
-    dplyr::filter(choosen_dates_southfork) %>%
+    dplyr::filter(Date %in% choosen_dates_southfork) %>%
     mutate(Date=as.character(Date), 
            location_type = ifelse(Location == "Reservoir", "Reservoir", "Stream"))
   
@@ -234,7 +236,7 @@ longitudinal_graphs <- function(res_chem_df, choosen_dates_chambers, choosen_dat
   mainstem_longitudinal <- res_chem_df %>%
     dplyr::filter(!is.na(ChlA)) %>%
     dplyr::filter(site_code %in% c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD"))%>%
-    dplyr::filter(choosen_dates_mainstem) %>%
+    dplyr::filter(Date %in% choosen_dates_mainstem) %>%
     mutate(Date=as.character(Date))
   
   ###PLOTING PART OF FUNCTION
@@ -317,7 +319,7 @@ longitudinal_graphs <- function(res_chem_df, choosen_dates_chambers, choosen_dat
  
  ##MAINSTEM PLOT
  
- mainstem_chla_long <- mainstem_chla_longitudinal%>%
+ mainstem_chla_long <- mainstem_longitudinal%>%
    ggplot() +
    geom_point( aes(x=Distance, y=ChlA, shape = Location, color=factor(Date)), size=8) +
    geom_line(aes(x=Distance, y=ChlA, group = Date ,color=factor(Date)), size=2) +
@@ -335,7 +337,7 @@ longitudinal_graphs <- function(res_chem_df, choosen_dates_chambers, choosen_dat
 
  
  #no3
- mainstem_no3_long <- mainstem_chla_longitudinal%>%
+ mainstem_no3_long <- mainstem_longitudinal%>%
    ggplot() +
    geom_point(aes(x=Distance, y=NO3, shape = Location, color=factor(Date)), size=5) +
    geom_line(aes(x=Distance, y=NO3, group = Date, color=factor(Date)), size=1) +
@@ -362,6 +364,12 @@ longitudinal_graphs <- function(res_chem_df, choosen_dates_chambers, choosen_dat
 ##Function for dotplot and timelines for main study reservoirs 
 
 dotplot_timelines <- function(res_chem){
+  
+  colorsBS <- c("Barnes Meadow Reservoir" = "#D55E00", "Chambers Lake" = "#E69F00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
+  
+  colorsBS_site_code <- c("BRNR" = "#D55E00", "CBRR" = "#F0E442", "JOER" = "#56B4E9", "LNGR" = "#0072B2", "PTRR" ="#E69F00" )
+  
+  colorsBS_in_order <-c("#0072B2","#56B4E9","#F0E442","#E69F00","#D55E00")
   
   main_reservoir_chla <-filter(res_chem, Year >= "2021", site_code %in% c("LNGR", "BRNR","CBRR","PTRR", "JOER"))%>%
     filter(!is.na(ChlA))

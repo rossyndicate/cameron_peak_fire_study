@@ -31,7 +31,8 @@ list(
      packages = c("ggplot2", "ggthemes", "ggpubr", "gghighlight", "plotly")
    ),
    tar_target(main_study_reservoirs_time_dotplot,
-              dotplot_timelines(reservoir_chem)),
+              dotplot_timelines(reservoir_chem), 
+              packages = c("ggplot2", "ggthemes", "ggpubr", "gghighlight", "plotly") ),
   
    tar_target(site_map,
            site_map_fun("data/cpf_sites.csv"),
