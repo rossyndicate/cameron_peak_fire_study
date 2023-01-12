@@ -202,8 +202,52 @@ reservoir_chemistry <- read_csv('data/ReservoirChemistry_010523.csv')%>%
   dplyr::arrange(as.factor(status))
 
 
+```
+
+##Data Checks
+
+```{r}
+
+#check start and end dates
+summary(reservoir_chemistry)
+
+# number of samples per site per year
+res_samples_year_site <- reservoir_chemistry%>%
+  group_by(Year, site_code)%>%
+  summarise( n = n())
+
+summary(res_samples_year_site)
 
 
+#Determning number of Samples....
+
+rmrs_chemistry <- read.csv("data/CamPkChem.csv")%>%
+  select(Date, SiteLabel ,ChlA)%>%
+  mutate(Date = as.Date.character(Date,format = "%d-%b-%y"),
+         yr = year(Date),
+    campaign = ifelse(SiteLabel %in% all_res_system, "Reservoir", 
+                    ifelse(SiteLabel %in% ISCO, "ISCO",
+                    ifelse(SiteLabel %in% Mainstem_sites, "Mainstem", "Tributary")) ))
+
+#samples by year and campaign
+
+res_chem_2022 <- rmrs_chemistry%>%
+  group_by(yr, campaign)%>%
+  summarise( n = n())
+
+# number of unique chla measurements
+unique_chla <- rmrs_chemistry%>%
+  drop_na()%>%
+  group_by(yr, campaign)%>%
+  summarise( n = n())
+
+
+
+
+```
+
+## Exporting data to csvs
+```{r writing}
 write.csv(reservoir_chemistry, 
           "data/prepped_reservoir_chemistry.csv")
 
@@ -222,33 +266,6 @@ write.csv(reservoir_chemistry_concise,
 
 ```
 
-## Sample determination
-
-```{r}
-
-
-#Determning number of Samples....
-
-reservoir_chemistry <- read.csv("data/CamPkChem.csv")%>%
-  select(Date, SiteLabel ,ChlA)%>%
-  mutate(Date = as.Date.character(Date,format = "%d-%b-%y"),
-         yr = year(Date),
-    campaign = ifelse(SiteLabel %in% all_res_system, "Reservoir", 
-                    ifelse(SiteLabel %in% ISCO, "ISCO",
-                    ifelse(SiteLabel %in% Mainstem_sites, "Mainstem", "Tributary")) ))
-
-#samples by year and campaign
-
-res_chem_2022 <- reservoir_chemistry%>%
-  group_by(yr, campaign)%>%
-  summarise( n = n())
-
-# number of unique chla measurements
-unique_chla <- reservoir_chemistry%>%
-  drop_na()%>%
-  group_by(yr, campaign)%>%
-  summarise( n = n())
-```
 
 ## Playing with FCGOV DATA
 
