@@ -16,8 +16,6 @@ library(tidyverse)
 library(lubridate)
 library(ggplot2)
 library(plotly)
-
-
 ```
 
 ## *Correcting Functions*
@@ -841,7 +839,7 @@ ggplotly(extrapolated_stage_Q)
 
 # *Exporting Q files*
 
-*Save into folder "Provisional_Q\_stage_data"*
+*Save into folder "data/Provisional_Q_stage_data"*
 
 ```{r}
 folder <- "data/Provisional_Q_stage_data/"
