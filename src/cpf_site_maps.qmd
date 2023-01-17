@@ -63,6 +63,19 @@ clp <- get_huc8(id = '10190007')
 clp_waterbodies <- get_waterbodies(AOI = clp)
 cpf_waterbodies <- filter(clp_waterbodies, gnis_name %in% c("Chambers Lake", "Peterson Lake", "Barnes Meadow Reservoir","Long Draw Reservoir", "Joe Wright Reservoir", "Comanche Reservoir", "Hourglass Reservoir"))
 
+chambers_lake <- filter(cpf_waterbodies, gnis_name == "Chambers Lake")
+st_write(chambers_lake, "data/cpf_sbs/cpf_waterbodies/chambers_lake.shp")
+peterson_lake <- filter(cpf_waterbodies, gnis_name == "Peterson Lake")
+st_write(peterson_lake, "data/cpf_sbs/cpf_waterbodies/peterson_lake.shp")
+long_draw_reservoir <- filter(cpf_waterbodies, gnis_name == "Long Draw Reservoir")
+st_write(long_draw_reservoir, "data/cpf_sbs/cpf_waterbodies/long_draw_reservoir.shp")
+barnes_meadow_reservoir <- filter(cpf_waterbodies, gnis_name == "Barnes Meadow Reservoir")
+st_write(barnes_meadow_reservoir, "data/cpf_sbs/cpf_waterbodies/barnes_meadow.shp")
+comanche_reservoir <-filter(cpf_waterbodies, gnis_name == "Comanche Reservoir")
+st_write(comanche_reservoir, "data/cpf_sbs/cpf_waterbodies/comanche_reservoir.shp")
+hourglass_reservoir <-filter(cpf_waterbodies, gnis_name == "Hourglass Reservoir")
+st_write(hourglass_reservoir, "data/cpf_sbs/cpf_waterbodies/hourglass_reservoirs.shp")
+
 clp_flowlines <- get_nhdplus(AOI = clp, 
                              realization='flowline')
 
@@ -97,7 +110,7 @@ st_write(UpLaramie_flowlines, "data/upLaramie_flowlines.shp")
 # Overview Map
 
 ```{r, echo=F }
-
+mapview(cpf_waterbodies)
 
 mapview(CPF_sites,zcol='Campaign')+ mapview(cpf_boundary)
 ```
