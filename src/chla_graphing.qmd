@@ -24,7 +24,7 @@ library(lubridate)
 library(sf)
 #library(mapview)       Takes time to load, not using it yet
 library(plotly)
-library(geomtextpath)
+library(padr)
 library(dplyr)
 library(gghighlight)
 
@@ -40,7 +40,7 @@ mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
 
 all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 
-reservoir_chemistry <- read.csv("data/prepped_reservoir_chemistry-DESKTOP-K61OFQI.csv")%>%
+reservoir_chemistry <- read.csv("data/prepped_reservoir_chemistry.csv")%>%
   mutate(Date = as.Date(Date),
          Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow", "Mainstem")))
 
@@ -809,12 +809,13 @@ joer_cbrr_ratios <- filter(reservoir_chemistry, site_code %in% c("JOEI",
          ChlA)%>%
   drop_na()%>%
   distinct()%>%
-  pivot_wider(names_from = site_code, values_from = ChlA)%>%
+  pivot_wider(names_from = site_code, values_from = ChlA)
+%>%
   mutate(jw_ratio = CBRI / JOEI,
          chambers_ratio = CHD/ CBRI, 
          Year = year(Date))
   
-  
+
 res_ratio_plot <- filter(joer_cbrr_ratios, Date != "2022-06-14")%>%
   ggplot()+
   
