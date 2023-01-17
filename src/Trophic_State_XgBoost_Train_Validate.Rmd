@@ -36,6 +36,7 @@ library(htmlTable)
 library(extrafont)
 library(colorscience)
 library(Metrics)
+library(padr)
 ```
 
 0) Read in skin temp CSVs from LakeCoSTR, CPF lakes limnosat pull and combine
@@ -91,14 +92,31 @@ cpf_lakes_limnosat <- read.csv("data/cpf_lagos_join_limnosat.csv")%>%
                      ifelse(lake_namegnis == "Halligan Reservoir", "HALR",
                      ifelse(lake_namegnis == "Seaman Reservoir", "SEAR","HSTR"))))))), 
          date= as.Date(date))%>%
-  select(LandsatID,date, site_code,  aerosol = Aerosol, blue=Blue, green = Green, red =Red, nir = Nir, swir1 = Swir1, swir2= Swir2, dwl, clouds = cScore_clouds, pixel_qa, hillShadow, sd_NirSD, pCount_dswe3,pCount_dswe1,lake_nhdid, lagoslakeid, hu12_zoneid, year, distance, system.index, TIR1, TIR2)%>%
+  select(LandsatID,date, site_code,  aerosol = Aerosol, blue=Blue, green = Green, red =Red, nir = Nir, swir1 = Swir1, swir2= Swir2, dwl, clouds = cScore_clouds, pixel_qa, hillShadow, sd_NirSD, pCount_dswe3,pCount_dswe1,lake_nhdid, lagoslakeid, hu12_zoneid, year, distance, system.index, TIR1, TIR2)
+%>%
   #join with temp dataframe
   left_join(., reservoir_skin_temps, by = c("site_code", "date"))
 
 #omits all the NA values (ie sites that don't have temp)
 #Dataset now only includes 5 study reservoirs
+
+
+in_situ_chla_cpf <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
+  select(site_code, date = Date, ChlA)%>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"), 
+         yr = year(date))%>%
+  na.omit(ChlA)%>%
+  padr::thicken('week')%>%
+  select(date_week,site_code,  ChlA, in_situ_date = date)
+  
+#Match ups in our dataset
 cpf_lakes_temp_dwl <- cpf_lakes_limnosat%>%
-  na.omit()
+  na.omit()%>%
+  padr::thicken( "week")%>%
+  left_join(in_situ_chla_cpf, by = c("date_week", "site_code"))%>%
+  na.omit(ChlA)
+
+
 
 
 ```
@@ -160,6 +178,65 @@ data <- data %>%
   drop_na()
 
 ```
+
+1.5) Modify cpf data to match Sillen training file ; filter, calculate band ratios, and remove correlated variables
+
+```{r}
+
+
+training <- training %>%
+  filter(pixelCount > 9, 
+         clouds < 50,    
+        across(c(blue, green, red, nir, swir1, swir2), ~ .x > 0 & .x < 2000)) %>% # taken from Simon Code (reasonable reflectance values ?)
+  mutate(dWL = fui.hue(red, green, blue),
+         red_to_blue = red/blue,
+         red_to_nir = red/nir,
+         nir_to_red = nir/red,
+         blue_to_green = blue/green,
+         green_to_blue = green/blue,
+         blue_min_red_ovr_green = (blue-red)/(green),
+         nir_sac = nir-swir1,
+         nir_sac2 = nir-1.03*swir1,
+         nir_min_red = nir-red,
+         id = row_number())
+#checking for correlated optical vars
+
+optical_dat <- training %>%
+  select(blue, green, red, dWL, red_to_blue, red_to_nir, nir_to_red, blue_to_green, green_to_blue, blue_min_red_ovr_green, nir_sac, nir_sac2, nir_min_red)
+
+corr.matrix <- cor(optical_dat)
+
+corr <- findCorrelation(corr.matrix, cutoff = 0.9)
+
+hc = sort(corr)
+
+reduced_Data = corr.matrix[,-c(hc)]
+
+# uncorrelated vars: blue,  dwl, red_to_blue,red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red
+
+data <- training %>%
+  select(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid,id, mean_temp_14_day, date, wind)
+
+#remove dups by using distinct
+
+data <- data %>%
+  distinct(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid, mean_temp_14_day, date, wind, .keep_all = TRUE)
+
+
+data$in_situ_cat <- cut(data$chl_a, breaks = c(0, 2.6, 7, 200), labels = c('oligotrophic', 'mesotrophic', 'eutrophic'))
+         
+#For xgboost categorical preds
+
+data$in_situ_cat <- as.numeric(as.factor(data$in_situ_cat))-1
+
+
+data <- data %>%
+  drop_na()
+
+```
+
+
+
 
 2) Set up train / test splits for random CV 
 ```{r}
