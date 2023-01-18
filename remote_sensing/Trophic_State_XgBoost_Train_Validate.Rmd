@@ -1,0 +1,382 @@
+---
+title: "Chl-a Model : Optical Only (XgBoost)"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Workflow
+```{r}
+
+## 1) Read in training file ; filter, calculate band ratios, and remove correlated variables 
+
+
+## 2) Set up train / test splits for random CV 
+
+
+## 3) Hypertune xgboost parameters and save as 'best_params' 
+
+
+## 4) Train final model with best params , look at evaluation metrics from test data
+
+```
+
+Packages
+```{r}
+setwd("~/Repositories/cameron_peak_fire_study")
+library(tidyverse)
+library(xgboost)
+library(caret)
+library(ggplot2)
+library(htmlTable)
+library(extrafont)
+library(colorscience)
+library(Metrics)
+library(padr)
+```
+
+0) Read in skin temp CSVs from LakeCoSTR, CPF lakes limnosat pull and combine
+```{r}
+read_and_combine <- function(folder_path, full_folder_path){
+  
+  # This ensures that version 2.0+ of the readr package (tidyverse) is being
+  # used, because it allows for reading multiple files
+  readr::local_edition(2) 
+  
+  # Read in all data files from all
+  all_data <- read_csv(
+    # Provide a vector/list of filenames to read
+    file = list.files(
+      path = folder_path,
+      # Search in all subfolders of `path` for csv files
+      recursive = TRUE,
+      # Use full filenames so R can find them
+      full.names = TRUE),
+    # Store the path to each csv in a "path" column
+    id = "path")
+  
+  # Now tidy up the dataset before returning it to the main workflow
+  cleaned_data <- all_data %>%
+    mutate(
+      # Create a new column with a shortened version of the path
+      site_code = gsub(pattern = full_folder_path,
+                     replacement = "",
+                     x = path),
+      # Extract just the folder name from this shortened version of the path
+      site_code = str_extract(string = site_code,
+      # Remove everything after the first bit of upper case text
+        pattern = "[A-Z]+"),
+      date_str = substring(`system:index`,nchar(`system:index`)-7,nchar(`system:index`) ),
+         date = as.Date(date_str, format = "%Y%m%d")
+  
+      
+      #DT =  as.POSIXct(datetime, format = "%m/%d/%Y %H:%M", tz = "MST")
+    )%>%
+    select(-c(date_str, path))
+}
+
+reservoir_skin_temps <- read_and_combine(folder_path = "~/Repositories/cameron_peak_fire_study/data/skin_temp_csvs",
+                                    full_folder_path = "C:/Users/Sam Struthers/OneDrive - Colostate/Documents/Repositories/cameron_peak_fire_study/data/skin_temp_csvs/")
+
+
+cpf_lakes_limnosat <- read.csv("data/cpf_lagos_join_limnosat.csv")%>%
+  mutate(site_code = ifelse(lake_namegnis == "Barnes Meadow Reservoir", "BRNR",
+                     ifelse(lake_namegnis == "Joe Wright Reservoir", "JOER",
+                     ifelse(lake_namegnis == "Chambers Lake", "CBRR",
+                     ifelse(lake_namegnis == "Peterson Lake", "PTRR",
+                     ifelse(lake_namegnis == "Long Draw Reservoir", "LNGR",
+                     ifelse(lake_namegnis == "Halligan Reservoir", "HALR",
+                     ifelse(lake_namegnis == "Seaman Reservoir", "SEAR","HSTR"))))))), 
+         date= as.Date(date))%>%
+  select(LandsatID,date, site_code,  aerosol = Aerosol, blue=Blue, green = Green, red =Red, nir = Nir, swir1 = Swir1, swir2= Swir2, dwl, clouds = cScore_clouds, pixel_qa, hillShadow, sd_NirSD, pCount_dswe3,pCount_dswe1,lake_nhdid, lagoslakeid, hu12_zoneid, year, distance, system.index, TIR1, TIR2)
+%>%
+  #join with temp dataframe
+  left_join(., reservoir_skin_temps, by = c("site_code", "date"))
+
+#omits all the NA values (ie sites that don't have temp)
+#Dataset now only includes 5 study reservoirs
+
+
+in_situ_chla_cpf <- read.csv("data/Prepped_Reservoir_Chemistry.csv")%>%
+  select(site_code, date = Date, ChlA)%>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"), 
+         yr = year(date))%>%
+  na.omit(ChlA)%>%
+  padr::thicken('week')%>%
+  select(date_week,site_code,  ChlA, in_situ_date = date)
+  
+#Match ups in our dataset
+cpf_lakes_temp_dwl <- cpf_lakes_limnosat%>%
+  na.omit()%>%
+  padr::thicken( "week")%>%
+  left_join(in_situ_chla_cpf, by = c("date_week", "site_code"))%>%
+  na.omit(ChlA)
+
+
+
+
+```
+
+1) Read in Sillen training file ; filter, calculate band ratios, and remove correlated variables
+
+```{r}
+training <- read.csv("data/training_sillen_model.csv") 
+
+source('src/ML_utils.R')
+
+training <- training %>%
+  filter(pixelCount > 9, 
+         clouds < 50,    
+        across(c(blue, green, red, nir, swir1, swir2), ~ .x > 0 & .x < 2000)) %>% # taken from Simon Code (reasonable reflectance values ?)
+  mutate(dWL = fui.hue(red, green, blue),
+         red_to_blue = red/blue,
+         red_to_nir = red/nir,
+         nir_to_red = nir/red,
+         blue_to_green = blue/green,
+         green_to_blue = green/blue,
+         blue_min_red_ovr_green = (blue-red)/(green),
+         nir_sac = nir-swir1,
+         nir_sac2 = nir-1.03*swir1,
+         nir_min_red = nir-red,
+         id = row_number())
+#checking for correlated optical vars
+
+optical_dat <- training %>%
+  select(blue, green, red, dWL, red_to_blue, red_to_nir, nir_to_red, blue_to_green, green_to_blue, blue_min_red_ovr_green, nir_sac, nir_sac2, nir_min_red)
+
+corr.matrix <- cor(optical_dat)
+
+corr <- findCorrelation(corr.matrix, cutoff = 0.9)
+
+hc = sort(corr)
+
+reduced_Data = corr.matrix[,-c(hc)]
+
+# uncorrelated vars: blue,  dwl, red_to_blue,red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red
+
+data <- training %>%
+  select(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid,id, mean_temp_14_day, date, wind)
+
+#remove dups by using distinct
+
+data <- data %>%
+  distinct(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid, mean_temp_14_day, date, wind, .keep_all = TRUE)
+
+
+data$in_situ_cat <- cut(data$chl_a, breaks = c(0, 2.6, 7, 200), labels = c('oligotrophic', 'mesotrophic', 'eutrophic'))
+         
+#For xgboost categorical preds
+
+data$in_situ_cat <- as.numeric(as.factor(data$in_situ_cat))-1
+
+
+data <- data %>%
+  drop_na()
+
+```
+
+1.5) Modify cpf data to match Sillen training file ; filter, calculate band ratios, and remove correlated variables
+
+```{r}
+
+
+training <- training %>%
+  filter(pixelCount > 9, 
+         clouds < 50,    
+        across(c(blue, green, red, nir, swir1, swir2), ~ .x > 0 & .x < 2000)) %>% # taken from Simon Code (reasonable reflectance values ?)
+  mutate(dWL = fui.hue(red, green, blue),
+         red_to_blue = red/blue,
+         red_to_nir = red/nir,
+         nir_to_red = nir/red,
+         blue_to_green = blue/green,
+         green_to_blue = green/blue,
+         blue_min_red_ovr_green = (blue-red)/(green),
+         nir_sac = nir-swir1,
+         nir_sac2 = nir-1.03*swir1,
+         nir_min_red = nir-red,
+         id = row_number())
+#checking for correlated optical vars
+
+optical_dat <- training %>%
+  select(blue, green, red, dWL, red_to_blue, red_to_nir, nir_to_red, blue_to_green, green_to_blue, blue_min_red_ovr_green, nir_sac, nir_sac2, nir_min_red)
+
+corr.matrix <- cor(optical_dat)
+
+corr <- findCorrelation(corr.matrix, cutoff = 0.9)
+
+hc = sort(corr)
+
+reduced_Data = corr.matrix[,-c(hc)]
+
+# uncorrelated vars: blue,  dwl, red_to_blue,red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red
+
+data <- training %>%
+  select(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid,id, mean_temp_14_day, date, wind)
+
+#remove dups by using distinct
+
+data <- data %>%
+  distinct(blue, dWL, nir, swir2, red_to_blue, red_to_nir, nir_to_red, green_to_blue, nir_sac, nir_min_red, chl_a, lagoslakeid, mean_temp_14_day, date, wind, .keep_all = TRUE)
+
+
+data$in_situ_cat <- cut(data$chl_a, breaks = c(0, 2.6, 7, 200), labels = c('oligotrophic', 'mesotrophic', 'eutrophic'))
+         
+#For xgboost categorical preds
+
+data$in_situ_cat <- as.numeric(as.factor(data$in_situ_cat))-1
+
+
+data <- data %>%
+  drop_na()
+
+```
+
+
+
+
+2) Set up train / test splits for random CV 
+```{r}
+#response variable 
+target <- 'in_situ_cat'
+
+#predictor vars or 'training features'
+#temp and wind won't be applicable for models over rivers
+feats <- c("blue", "dWL", "nir", "swir2", "red_to_blue", "red_to_nir", "nir_to_red", "green_to_blue", "nir_sac", "nir_min_red", "mean_temp_14_day","wind")
+
+#for reproducible model outputs
+set.seed(100)
+
+#this is for random validation, set aside 80 % of our training dataset for trainig
+train <- data %>% sample_frac(0.8)
+
+#the rest, our holdout (20%) of our training set for model testing
+test <- data %>% 
+  filter(!id %in% train$id)
+
+#create xgb matrix for train data
+dtrain <- xgb.DMatrix(data = as.matrix(train[feats]), label = train[target][[1]])
+
+#create xgb matrix for test data
+dtest <- xgb.DMatrix(data = as.matrix(test[feats]), label = test[target][[1]])
+
+```
+
+3) Hypertune xgboost parameters and save as 'best_params' 
+```{r}
+
+grid_train <- expand.grid(
+  max_depth= c(2,3,4), #max depth is Maximum depth of a tree. Increasing this value will make the model more complex and more likely to overfit.
+  subsample = c(.5,.8,1),#subsample describes the subsample ratio of the training instances. Setting it to 0.5 means that XGBoost would randomly sample half of the training data prior to growing trees, and this would prevent overfitting
+  colsample_bytree= c(.5,.8,1),#col sample by tree specify the fraction of columns to be subsampled.
+  eta = c(.01, 0.1), #eta shrinks the feature weights of new features to make the boosting process more conservative.
+  min_child_weight= c(1,3,5) 
+)
+
+#below is a function that select hyperparamters that result in the lowest model error (log loss)
+
+hypertune_xgboost = function(train,test, grid){
+  
+  params <- list(booster = "gbtree", objective = 'multi:softmax', eta=grid$eta ,max_depth=grid$max_depth, 
+                 min_child_weight=grid$min_child_weight, subsample=grid$subsample, colsample_bytree=grid$colsample_bytree)
+  
+  xgb.naive <- xgb.train(params = params, data = dtrain, nrounds = 2000, 
+                         watchlist = list(train = train, val = test), 
+                         print_every_n =100, early_stopping_rounds = 20, num_class = 3)
+  
+  summary <- grid %>% mutate(val_loss = xgb.naive$best_score, best_message = xgb.naive$best_msg)
+  
+  return(summary) 
+}
+
+## Hypertune xgboost
+xgboost_hypertune <- grid_train %>%
+  pmap_dfr(function(...) {
+    current <- tibble(...)
+    hypertune_xgboost(dtrain,dtest,current)
+  })
+
+best_params <- xgboost_hypertune[xgboost_hypertune$val_loss==min(xgboost_hypertune$val_loss),]
+
+#pull out the best parameters
+
+best_params <- list(booster = "gbtree", objective = 'multi:softmax',
+               eta=best_params$eta,
+               max_depth=best_params$max_depth, 
+               min_child_weight=best_params$min_child_weight, 
+               subsample=best_params$subsample, 
+               colsample_bytree=best_params$colsample_bytree)
+
+
+
+```
+
+4) Re-train final model with best params , look at evaluation metrics from test data
+```{r}
+#train final model with best params
+
+final_model <- xgb.train(params = best_params, data = dtrain, nrounds = 2000, 
+                         print_every_n = 20, num_class = 3)
+
+#evaluate model using trest data
+
+test <- test %>%
+  mutate(trophic_predicted = predict(final_model, dtest),
+         in_situ_cat = case_when(in_situ_cat ==0~'oligotrophic',
+                                 in_situ_cat==1~'mesotrophic',
+                                 in_situ_cat==2~'eutrophic'),
+         trophic_predicted = case_when(trophic_predicted==0~'oligotrophic',
+                                       trophic_predicted==1~'mesotrophic',
+                                       trophic_predicted==2~'eutrophic'))
+
+
+cv <- confusionMatrix(factor(test$trophic_predicted),factor(test$in_situ_cat))
+
+cv
+
+plot <- as.data.frame(cv$table) %>%
+  rename(Frequency = "Freq")
+
+plot$Prediction <- factor(plot$Prediction, levels=rev(levels(plot$Prediction)))
+
+ggplot(plot, aes(Prediction,Reference, fill= Frequency)) +
+        geom_tile() + geom_text(aes(label=Frequency), size = 10) +
+        scale_fill_gradient(low="white", high="#2158bc", ) +
+        labs(x = "Observed",y = "Predicted", title = "") +
+        scale_x_discrete(labels=c("Oligotrophic", "Mesotrophic", "Eutrophic")) +
+        scale_y_discrete(labels=c( "Eutrophic", "Mesotrophic", "Oligotrophic")) +
+        theme_bw() +
+        theme(axis.text.x=element_text(size=15, colour = 'black'),panel.grid.minor = element_blank(), panel.grid.major = element_blank(), axis.text.y = element_text(size=15,colour = 'black'), axis.title.x =     element_text(size=20, face = 'bold'),axis.title.y = element_text(size=20, face = 'bold'), legend.title = element_text(size = 15), legend.text = element_text(size = 15)) 
+
+```
+
+#Explore feature importance
+```{r}
+imp <- xgb.importance(model = final_model)
+
+xgb.plot.importance(importance_matrix = imp)
+```
+
+
+#Using the model to predict
+```{r}
+
+#To use the model to predict on the full sf dataset (i.e. Limnosat) , read in sf, then make it a matrix, then use predict()
+
+#Below is an example
+
+sf <- read.csv("C:/Users/samsi/Desktop/sf.csv")
+
+
+dtest <- xgb.DMatrix(data = as.matrix(sf[feats]))
+
+
+sf_final <- sf %>%
+  mutate(trophic_predicted = predict(final_model, dtest))
+
+
+```
+```
