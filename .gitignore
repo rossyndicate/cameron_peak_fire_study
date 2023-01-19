@@ -6,6 +6,6 @@ data/
 docs/
 output/
 CPL/
-test_fig/
 future_targets/
 cpf_targets/_targets/
+data
