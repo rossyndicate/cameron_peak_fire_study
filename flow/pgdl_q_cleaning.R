@@ -91,6 +91,8 @@ write_csv(clp_usgs_Q_final, file = "data/Q_modeling/usgs_clp_Q.csv")
 
 #------- Pull in Larimer County Data -----#
 
+# URL of the site to select specific stations
+station_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/"
 
 
 
@@ -113,3 +115,20 @@ kampf_meta <- read_csv("data/Kampf_metadata.csv")%>%
 
 write_csv(kampf_meta, "data/Q_modeling/kampf_stream_sites_simple.csv")
 
+
+#----- Pull in Greeley data ------#
+
+brnr_ptrr_daily_q <- read_csv("data/Q_modeling/BRNR_PTRR_Q.csv")%>%
+  mutate(inflow = replace_na(inflow, 0), 
+         date = as.Date(date, format = "%m/%d/%y"))
+
+plot_brnr_ptrr <- brnr_ptrr_daily_q%>%
+  ggplot(aes( x= date ))+
+  geom_line(aes(y= inflow), color = "blue")+
+  geom_line(aes(y= outflow), color = "red")+
+  theme_bw(base_size = 20)+
+  facet_wrap(~site)+
+  ylab("Q in cfs")
+plot(plot_brnr_ptrr)  
+
+ggsave("output/brnr_ptrr_Q.jpg", width = 12, height = 8)
