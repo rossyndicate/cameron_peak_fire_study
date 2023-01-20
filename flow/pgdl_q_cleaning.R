@@ -78,7 +78,8 @@ clp_usgs_Q_final <- clean_clp_usgs_Q %>%
          Q_cfs, Q_flag, tz, 
          site_name)
 
-write.csv(clp_usgs_Q_final, file = "data/usgs_clp_Q.csv")
+write_csv(clp_usgs_Q_final, file = "data/Q_modeling/usgs_clp_Q.csv")
+
 
 #------- Pull in Larimer County Data -----#
 
@@ -87,3 +88,20 @@ write.csv(clp_usgs_Q_final, file = "data/usgs_clp_Q.csv")
 
 #------ Pull in DWR Data ------#
 #https://dwr.state.co.us/tools/stations
+
+
+#----- Kampf site locations ----#
+kampf_meta <- read_csv("data/Kampf_metadata.csv")%>%
+  select(name = Name, 
+         type = Type, 
+         lat = Latitude, 
+         long = Longitude, 
+         start_date = Sensor_install, 
+         active = Sensor_remove, 
+         comments = Comments)%>%
+  filter(type == "stream" &active == "still running")%>%
+  distinct(name, .keep_all = TRUE)%>%
+  select(name, lat, long, start_date)
+
+write_csv(kampf_meta, "data/Q_modeling/kampf_stream_sites_simple.csv")
+
