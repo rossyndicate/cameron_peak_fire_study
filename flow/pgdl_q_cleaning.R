@@ -24,25 +24,31 @@ package_load(pack_req)
 
 #---CODE----#
 
-#parameter code for discharge
-pcode_Q <- "00060"
-#sites
-site_names <- data.frame( site_no = c("06752260", "06752280", "06751490", "06746095","06746110", "06751145","06751150"), 
-                          site_name = c("CLP at FC","CLP above BoxEld" ,"N fork near Livermore", "JW above Res" ,"JW below Res" , "N fork above Halligan", "N fork below Halligan") )
 
-clp_usgs_sites <- c("06752260", "06752280", "06751490", "06746095","06746110", "06751145","06751150")
-#start date
-start_date <- as.POSIXct("2019-01-01" , tz = "UTC")
-#end date = today
-end_date <- lubridate::force_tz(Sys.Date(), tzone = "UTC")
+# Set the HUC code and parameter code
+huc_code <- "10190007"
+parameter_code <- "00060"
 
-#function to select Q from NWIS given site code. Dates selected above
+# Use the whatNWISdata function to get site information for all sites in the HUC with the specified parameter code
+usgs_clp_site_info <- whatNWISdata(parameterCd = parameter_code, huc = huc_code)%>%
+  distinct(site_no ,.keep_all = TRUE)%>%
+  filter(end_date >= "2020-01-01")%>%
+  select(site_no, site_name = station_nm, lat = dec_lat_va, long = dec_long_va, start_date = begin_date, end_date)
+
+clp_usgs_sites<- select(usgs_clp_site_info, site_no)
+site_names <- select(usgs_clp_site_info, c(site_no, site_name))
+
+#save for later use
+#write_csv(usgs_clp_site_info, "data/Q_modeling/usgs_sites_simple.csv")
+
+
+
+#function to select Q from NWIS given site code. Dates autoselected for oldest and newest data available
 read_q <- function(sites){
   site_Q <- readNWISuv(siteNumbers = sites, 
-             parameterCd = pcode_Q, 
+             parameterCd = parameter_code, 
              tz = "America/Denver")
   return(site_Q)
-  Sys.sleep(10)
 }
 
 #Pull in all Q for sites selected above
@@ -69,7 +75,9 @@ plot_all_sites <- clean_clp_usgs_Q %>%
   theme_bw() +
   facet_wrap( ~ site_name)
 
-plot(plot_all_sites)
+#plot(plot_all_sites)
+
+#ggsave("output/USGS_sites.jpg", width = 20, height = 12)
 
 clp_usgs_Q_final <- clean_clp_usgs_Q %>% 
   select(agency = agency_cd, 
