@@ -19,5 +19,10 @@ pack_req <- c("tidyverse",
               "nhdplusTools", 
               "padr", 
               "rjson", 
-              "dataRetrieval")
+              "rvest", 
+              "dataRetrieval", 
+              "httr", 
+              "tigris",
+              "raster")
+package_load(pack_req)
 
