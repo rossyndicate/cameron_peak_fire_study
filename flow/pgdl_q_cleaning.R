@@ -19,7 +19,7 @@
 
 # Setup
 source("package_loader.R")
-package_load(pack_req)
+
 
 
 #---CODE----#
