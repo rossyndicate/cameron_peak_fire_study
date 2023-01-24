@@ -9,54 +9,132 @@
 source("package_loader.R")
 package_load(pack_req)
 
-#start and end dates
-start_date = as.Date("2010-01-01 00:00")
-end_date = format(Sys.time(), "%Y-%m-%d %H:%M")
+#sites with Q
+clp_Q_site_nums <- tibble(station_ids = c("11531", "11530", "11525", 
+                    "11514", "11004", "11515",
+                    "11518", "11517", "11516",
+                    "6770", "11083", "11082",
+                    "11009","7130","10408", "11021"))
+bigt_Q_site_nums <- tibble(station_ids = c("11567","11566","11564","11563","11562",
+                     "11561","11560", "11559","11558",
+                     "95100", "95000","3640","3610","3570"," 3530" ))
 
 
 #station dashboard url
 station_dashboard <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/"
 
-station_choice <- paste0(station_dashboard, 
-                         #insert choice number here
-                         "11021")
-discharge_choice <- POST(
-  url = station_choice, 
-  
-)
-test_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId=11560&periodStart=2022-01-16T13:30:00-07:00&periodEnd=2023-01-24T13:30:00-07:00"
-text_Q_pull <-GET(url = test_url)
-text_Q_pull
-
-#Function to create URL based on each site with flow
-create_url <- function(site_num, start_dt, end_dt){
+create_url <- function(site_num){
+  end_dt <- "2023-01-24T13:30:00-07:00"
   start_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId="
-  mid_url <- "&periodStart="
-  end_url <- "&periodEnd="
+
+  final_url <- tibble( site_num = site_num, 
+                       url = paste0(start_url, site_num))
+  return(final_url)
+}
+#
+clp_url_meta <- map_dfr(clp_Q_site_nums, create_url)
+
+
+#Function to create URL to pull datetime and sensor data
+create_url_dt <- function(site_num){
+  end_dt <- "2023-01-24T13:30:00-07:00"
+  start_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId="
+  mid_url <- "&periodStart=2000-01-01T00:00:00-07:00&periodEnd="
   
-  final_url <- paste0(start_url, site_num, mid_url, start_dt, end_url, end_dt)
+  final_url <- tibble( site_num = site_num, 
+                      url = paste0(start_url, site_num, mid_url, end_dt))
   return(final_url)
 }
 
-#gives content of httr pull
-named_listQ <- content(text_Q_pull)
-# find list where discharge data is stored
-test2_Q <- named_listQ[["stationSummaries"]][[1]][["ts"]][[3]][["data"]]
-# find station metadata
-get_meta() <- function(){
-  station_meta <- tibble(
-    id = named_listQ[["stationSummaries"]][[1]][["id"]], 
-    numid = named_listQ[["stationSummaries"]][[1]][["numId"]], 
-    name = named_listQ[["stationSummaries"]][[1]][["name"]]
-  )
+#get all urls for Poudre and Big Thompson flow sites
+clp_urls_dt <- map_dfr(clp_Q_site_nums, create_url_dt)
+bigt_urls_dt <- map_dfr(bigt_Q_site_nums, create_url_dt)
+
+site_url_1 <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId=6770&periodStart=2000-01-01T17:00:00-07:00&periodEnd=2023-01-24T13:30:00-07:00"
+site_url <-"https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId=6770&periodStart=2022-10-25T16:35:19-06:00&periodEnd=2023-01-24T15:35:19-07:00"
+site_url_corr <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId=6770&periodStart=2000-01-01T17:34:57-07:00&periodEnd=2023-01-23T17:34:57-07:00"
+
+site_url<- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId=11531"
+
+request_url <- function(site_url, site_num){
+  
+  #create request to novastar website using url created above
+  request <-GET(url = site_url)
+  #gives content of httr pull
+  total_list <- content(request)
   
 }
 
+clp_url_meta_test<- clp_url_meta%>%
+  dplyr::select(site_url = url)
 
-get_q <- function(i){
+get_sensor_meta_data <- function(site_url){
   
- unlist(test2_Q[[i]])
+  #create request to novastar website using url created above
+  request <-GET(url = site_url)
+  #gives content of httr pull
+  total_list <- content(request)
   
+  
+  sensor_list <- total_list[["stationSummaries"]][[1]][["dataTypes"]]
+  
+  station_meta <- as.data.frame(do.call(rbind, sensor_list))%>%
+    mutate(name = as.character(name))%>%
+    distinct(name)%>%
+    mutate(sensor_list_num = row_number())%>%
+    pivot_wider( names_from = "name", values_from = "sensor_list_num")%>%
+    mutate(id = total_list[["stationSummaries"]][[1]][["id"]], 
+         numid = total_list[["stationSummaries"]][[1]][["numId"]], 
+         name = total_list[["stationSummaries"]][[1]][["name"]],
+         elevation = total_list[["stationSummaries"]][[1]][["elevation"]],
+         lat = total_list[["stationSummaries"]][[1]][["latitude"]],
+         long = total_list[["stationSummaries"]][[1]][["longitude"]])
+
+}
+map_
+
+stations_meta <- map(clp_url_meta_test, get_sensor_meta_data)%>%
+  list_rbind()
+test_meta <- data.frame()
+for( i in 1:length(clp_url_meta_test$site_url)){
+  
+  #create request to novastar website using url created above
+  request <-GET(url = clp_url_meta_test$site_url[i])
+  #gives content of httr pull
+  total_list <- content(request)
+  
+  
+  sensor_list <- total_list[["stationSummaries"]][[1]][["dataTypes"]]
+  
+  station_meta <- as.data.frame(do.call(rbind, sensor_list))%>%
+    mutate(name = as.character(name))%>%
+    distinct(name)%>%
+    mutate(sensor_list_num = row_number())%>%
+    pivot_wider( names_from = "name", values_from = "sensor_list_num")%>%
+    mutate(id = total_list[["stationSummaries"]][[1]][["id"]], 
+           numid = total_list[["stationSummaries"]][[1]][["numId"]], 
+           name = total_list[["stationSummaries"]][[1]][["name"]],
+           elevation = total_list[["stationSummaries"]][[1]][["elevation"]],
+           lat = total_list[["stationSummaries"]][[1]][["latitude"]],
+           long = total_list[["stationSummaries"]][[1]][["longitude"]])
+  final_meta <- plyr::rbind.fill(test_meta, station_meta)
+  
+}
+
+#join 2 columns with different sets of sensors
+station_meta <- plyr::rbind.fill(test1_station_meta, test2_station_meta)
+
+
+get_q_list <- function(site_num){
+  
+  dicharge_sensor_num <- filter(station_meta, numid == "site_num")%>%
+    
+    
+  # find list where discharge data is stored
+  
+  discharge_list <- total_list[["stationSummaries"]][[1]][["ts"]][[3]][["data"]]
+  
+ unlist(dicharge_list[[i]])
 }
 
 testing_wooooo <- map_dfr(seq(1, length(test2_Q), 1), get_q)%>%
