@@ -13,5 +13,57 @@ source("package_loader.R")
 
 This section will create urls for used to pull in all sites in the  Cache La Poudre (CLP) and Big Thompson (BIGT) watersheds. 
 
+## Functions
 
+```{r url functions}
+#Create urls for metadata pulls
+create_meta_url <- function(site_num){
+
+  start_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId="
+  final_url <- tibble( site_number = site_num, 
+                       site_url = paste0(start_url, site_num))
+  return(final_url)
+}
+
+#Create urls for Q or other sensor pulling
+create_data_url <- function(site_num){
+  end_dt <- "2023-01-24T13:30:00-07:00"
+  start_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId="
+  mid_url <- "&periodStart=2021-01-01T00:00:00-07:00&periodEnd="
+  
+  final_url <- tibble( site_number = site_num, 
+                      site_url = paste0(start_url, site_num, mid_url, end_dt))
+  return(final_url)
+}
+
+```
+
+## Create urls
+```{r}
+#Station numbers
+clp_Q_site_nums <- tibble(station_ids = c("11531", "11530", "11525", 
+                    "11514", "11004", "11515",
+                    "11518", "11517", "11516",
+                    "6770", "11083", "11082",
+                    "11009","7130","10408", "11021"))
+bigt_Q_site_nums <- tibble(station_ids = c("11567","11566","11564",
+                                           "11563","11562","11561",
+                                           "11560", "11559","11558",
+                                          "95100", "95000","3640",
+                                          "3610","3570","3520" ))
+
+
+#Meta URLs
+clp_meta_url <- map_dfr(clp_Q_site_nums, create_meta_url)%>%
+  as.data.frame()
+bigt_meta_url <- map_dfr(bigt_Q_site_nums, create_meta_url)%>%
+  as.data.frame()
+
+#Data URLs
+clp_data_url <- map_dfr(clp_Q_site_nums, create_data_url)%>%
+  as.data.frame()
+bigt_data_url <- map_dfr(bigt_Q_site_nums, create_data_url)%>%
+  as.data.frame()
+
+```
 
