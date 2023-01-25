@@ -113,3 +113,36 @@ bigt_station_meta <- map2_dfr(bigt_meta_url$site_url, bigt_meta_url$site_number,
 #create a total meta_df that can be referenced in downloading functions later on
 final_meta <- rbind(clp_station_meta, bigt_station_meta)
 ```
+## Check the Q
+ I'd recommend going to https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/100
+ to double check and make sure the data looks similar to the sites you pulled
+ 
+```{r}
+
+test_df_q<- test_q_df%>%
+  mutate(nice_dt = substr(dt, 1, nchar(dt)-9),
+    datetime = as.POSIXct(dt, format = "%Y-%m-%dT%H:%M"), 
+         q_cfs = as.double(v) )
+
+plot_test_Q <- test_df_q%>%
+  ggplot(aes( x= datetime, y = q_cfs))+
+  geom_line()+
+  theme_bw()+
+  facet_wrap(~numid)
+plot(plot_test_Q)
+
+
+
+final_df_q<- clp_q_station_data%>%
+  mutate(nice_dt = substr(dt, 1, nchar(dt)-9),
+    datetime = as.POSIXct(dt, format = "%Y-%m-%dT%H:%M"), 
+         q_cfs = as.double(v) )
+
+plot_test_Q <- final_df_q%>%
+  ggplot(aes( x= datetime, y = q_cfs))+
+  geom_line()+
+  theme_bw()+
+  facet_wrap(~numid)
+plot(plot_test_Q)
+
+
