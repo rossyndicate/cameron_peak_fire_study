@@ -113,6 +113,74 @@ bigt_station_meta <- map2_dfr(bigt_meta_url$site_url, bigt_meta_url$site_number,
 #create a total meta_df that can be referenced in downloading functions later on
 final_meta <- rbind(clp_station_meta, bigt_station_meta)
 ```
+
+# Q pull
+
+This section will focus on downloading all the Q data available in the CLP and BIGT watershed available on the NovaStar site
+## Functions
+
+```{r Q grab function}
+
+#This function actually breaks down the list for a given site into the datetime and value components
+unlist_q_data <- function(i){
+ unlist(discharge_data[[i]])
+}
+
+ 
+
+download_q <- function(site_url, site_number) {
+  
+  #create request to novastar website using url created 
+  request <- GET(url = site_url)
+  
+  #gives content of httr pull
+  total_list <- content(request)
+  
+  #find list number where q is located
+  site_meta <- filter(final_meta, numid == site_number)
+  
+  Q_sensor_num <-  as.numeric(site_meta$DischargeRiver[1]) 
+  
+    # find list where discharge data is stored
+    
+  discharge_data <- total_list[["stationSummaries"]][[1]][["ts"]][[Q_sensor_num]][["data"]]
+  
+  
+  q_df <- map_dfr(seq(1, length(discharge_data), 1), unlist_q_data)%>%
+    mutate(numid = site_number)
+  
+  
+  return(q_df)
+  
+   Sys.sleep(2)
+}
+
+test_site_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId=11531&periodStart=2022-01-25T13:59:00-07:00&periodEnd=2023-01-26T13:59:00-07:00"
+ test_site_number <- "11531"
+#
+ 
+ test_q_df <- download_q(site_url = test_site_url, site_number = test_site_number)
+ 
+# df_11531 <- download_q(site_url = clp_data_url_test$site_url[1],site_number = clp_data_url_test$site_number[1])
+# df_11530 <- download_q(site_url = clp_data_url_test$site_url[2],site_number = clp_data_url_test$site_number[2])
+
+```
+
+## Pulling the Q
+
+```{r}
+
+#maps to get all metadata/ location of all sensors within JSON
+clp_data_url_test <- head(clp_data_url, 2)%>%
+  rename(site_number = site_num)
+
+clp_q_station_data <- map2_dfr(clp_data_url_test$site_url, clp_data_url_test$site_number, download_q)
+
+bigt_q_station_data <- map2_dfr(bigt_meta_url$site_url, bigt_meta_url$site_num, get_station_meta)
+
+```
+
+
 ## Check the Q
  I'd recommend going to https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/100
  to double check and make sure the data looks similar to the sites you pulled
@@ -146,3 +214,4 @@ plot_test_Q <- final_df_q%>%
 plot(plot_test_Q)
 
 
+```
