@@ -3,7 +3,7 @@
 
 site_list <- data_frame(site_name = c("bl4","aspen", "greyrock" ))
 
-kampf_manual <- read_csv("data/discharge_google.csv")%>%
+kampf_manual <- read_csv("data/flow_kampf/manual_stage_q.csv")%>%
  dplyr::select(site_code = site, datetime, manual_stage_cm, notes = comments )%>%
   filter(site_code %in% site_list$site_name & manual_stage_cm != is.na(manual_stage_cm) )%>%
   mutate(datetime = as.character(as.POSIXct(datetime, tz = "MST",  format = "%m/%d/%Y %H:%M")))%>%
@@ -48,7 +48,7 @@ kampf_manual <- read_csv("data/discharge_google.csv")%>%
   
   
   #Creating stage vs Q dataframe
-  kampf_stage_Q <- read_csv("data/discharge_google.csv")%>%
+  kampf_stage_Q <- read_csv("data/flow_kampf/manual_stage_q.csv")%>%
     dplyr::select(site_code = site, datetime, manual_stage_cm, discharge_Ls, notes = comments )%>%
     filter(site_code %in% site_list$site_name & manual_stage_cm != is.na(manual_stage_cm)
            & discharge_Ls != is.na(discharge_Ls))%>%
@@ -64,6 +64,6 @@ kampf_manual <- read_csv("data/discharge_google.csv")%>%
 
   
   #Export!
-  write_csv(kampf_stage_Q_means, "data/kampf_test_manual_stage_Q.csv")
-  write_csv(manual_measurements_kampf, "data/kampf_test_manual_stage.csv")
+#  write_csv(kampf_stage_Q_means, "data/kampf_test_manual_stage_Q.csv")
+# write_csv(manual_measurements_kampf, "data/kampf_test_manual_stage.csv")
 
