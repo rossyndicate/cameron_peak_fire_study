@@ -1,9 +1,11 @@
 # This script is to automate the manual measurement cleaning
 # for data sent from Megan/Stephanie
 
+site_list <- data_frame(site_name = c("bl4","aspen", "greyrock" ))
+
 kampf_manual <- read_csv("data/discharge_google.csv")%>%
  dplyr::select(site_code = site, datetime, manual_stage_cm, notes = comments )%>%
-  filter(site_code %in% c("bl4","aspen", "greyrock" ) & manual_stage_cm != is.na(manual_stage_cm) )%>%
+  filter(site_code %in% site_list$site_name & manual_stage_cm != is.na(manual_stage_cm) )%>%
   mutate(datetime = as.character(as.POSIXct(datetime, tz = "MST",  format = "%m/%d/%Y %H:%M")))%>%
   distinct(datetime, .keep_all = TRUE)%>%
   mutate(first_measurement_DT = NA, 
@@ -11,11 +13,11 @@ kampf_manual <- read_csv("data/discharge_google.csv")%>%
          first_measurement_cm = NA, 
          last_measurement_cm =NA)
   
-  site_list <- data_frame(site_name = unique(kampf_manual$site_code))
+
     
 
   
-  create_start_end <- function(site_name){
+  create_first_last <- function(site_name){
     
     #subset by indv site
     manual_by_site <- filter(kampf_manual, site_code == site_name)%>%
@@ -40,5 +42,28 @@ kampf_manual <- read_csv("data/discharge_google.csv")%>%
     
   }
   
-  manual_measurements_kampf <- map_dfr(site_list$site_name, create_start_end)
+  #final dataframe
+  manual_measurements_kampf <- map_dfr(site_list$site_name, create_first_last)%>%
+    dplyr::select(site_code, first_measurement_DT, last_measurement_DT, first_measurement_cm, last_measurement_cm, notes)
+  
+  
+  #Creating stage vs Q dataframe
+  kampf_stage_Q <- read_csv("data/discharge_google.csv")%>%
+    dplyr::select(site_code = site, datetime, manual_stage_cm, discharge_Ls, notes = comments )%>%
+    filter(site_code %in% site_list$site_name & manual_stage_cm != is.na(manual_stage_cm)
+           & discharge_Ls != is.na(discharge_Ls))%>%
+    mutate(datetime = as.character(as.POSIXct(datetime, tz = "MST",  format = "%m/%d/%Y %H:%M")))
+  
+  kampf_stage_Q_means<- kampf_stage_Q%>%
+    group_by(datetime, site_code)%>%
+    mutate(mean_Ls = mean(discharge_Ls))%>%
+    ungroup()%>%
+    distinct(datetime, .keep_all = TRUE)%>%
+    mutate(q_cfs = (mean_Ls/28.316847))%>%
+    dplyr::select(site_code, datetime, manual_stage_cm, mean_Ls, q_cfs, notes)
+
+  
+  #Export!
+  write_csv(kampf_stage_Q_means, "data/kampf_test_manual_stage_Q.csv")
+  write_csv(manual_measurements_kampf, "data/kampf_test_manual_stage.csv")
 
