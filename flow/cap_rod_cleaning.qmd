@@ -20,21 +20,21 @@ library(plotly)
 
 ## *Correcting Functions*
 
-*'driftR` package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder:*
+*'driftR\` package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder:*
 
 ```{r}
-source("src/driftR_functions/dr_correctOne.R")
-source("src/driftR_functions/dr_correctTwo.R")
-source("src/driftR_functions/dr_drop.R")
-source("src/driftR_functions/dr_factor.R")
-source("src/driftR_functions/dr_read.R")
-source("src/driftR_functions/dr_readSonde.R")
-source("src/driftR_functions/dr_replace.R")
-source("src/driftR_functions/notInOperator.R")
-source("src/driftR_functions/parseTime.R")
-source("src/driftR_functions/sondeCal.R")
-source("src/driftR_functions/sondeClean.R")
-source("src/driftR_functions/sondeRaw.R")
+source("flow/driftR_functions/dr_correctOne.R")
+source("flow/driftR_functions/dr_correctTwo.R")
+source("flow/driftR_functions/dr_drop.R")
+source("flow/driftR_functions/dr_factor.R")
+source("flow/driftR_functions/dr_read.R")
+source("flow/driftR_functions/dr_readSonde.R")
+source("flow/driftR_functions/dr_replace.R")
+source("flow/driftR_functions/notInOperator.R")
+source("flow/driftR_functions/parseTime.R")
+source("flow/driftR_functions/sondeCal.R")
+source("flow/driftR_functions/sondeClean.R")
+source("flow/driftR_functions/sondeRaw.R")
 ```
 
 ## *Importing and Combining*
@@ -839,7 +839,7 @@ ggplotly(extrapolated_stage_Q)
 
 # *Exporting Q files*
 
-*Save into folder "data/Provisional_Q_stage_data"*
+*Save into folder "data/Provisional_Q\_stage_data"*
 
 ```{r}
 folder <- "data/Provisional_Q_stage_data/"
