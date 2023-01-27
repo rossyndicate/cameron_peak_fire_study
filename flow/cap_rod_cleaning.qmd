@@ -20,21 +20,21 @@ library(plotly)
 
 ## *Correcting Functions*
 
-*'driftR` package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder:*
+*'driftR\` package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder:*
 
 ```{r}
-source("src/driftR_functions/dr_correctOne.R")
-source("src/driftR_functions/dr_correctTwo.R")
-source("src/driftR_functions/dr_drop.R")
-source("src/driftR_functions/dr_factor.R")
-source("src/driftR_functions/dr_read.R")
-source("src/driftR_functions/dr_readSonde.R")
-source("src/driftR_functions/dr_replace.R")
-source("src/driftR_functions/notInOperator.R")
-source("src/driftR_functions/parseTime.R")
-source("src/driftR_functions/sondeCal.R")
-source("src/driftR_functions/sondeClean.R")
-source("src/driftR_functions/sondeRaw.R")
+source("flow/driftR_functions/dr_correctOne.R")
+source("flow/driftR_functions/dr_correctTwo.R")
+source("flow/driftR_functions/dr_drop.R")
+source("flow/driftR_functions/dr_factor.R")
+source("flow/driftR_functions/dr_read.R")
+source("flow/driftR_functions/dr_readSonde.R")
+source("flow/driftR_functions/dr_replace.R")
+source("flow/driftR_functions/notInOperator.R")
+source("flow/driftR_functions/parseTime.R")
+source("flow/driftR_functions/sondeCal.R")
+source("flow/driftR_functions/sondeClean.R")
+source("flow/driftR_functions/sondeRaw.R")
 ```
 
 ## *Importing and Combining*
@@ -111,6 +111,44 @@ manual_measurements <- read.csv(field_stage) %>%
                                           format = "%m/%d/%Y %H:%M", tz = "MST"))
 ```
 
+### Kampf lab importing
+
+[**DO NOT RUN THIS CHUNK UNLESS USING KAMPF DATA!**]{.underline}
+
+Kampf lab has a long term dataset that has been managed over the years by various folks. This chunk will read in and combine their composite files to match the format from the chunk above.
+
+Eventually, this workflow many be modified to read in raw data so that the workflow is completely reproducible.
+
+```{r kampf import}
+
+#could probably functionalize this, Megan!
+
+aspen <- read_csv("data/flow_kampf/aspen_stage_composite.csv")%>%
+  mutate(DT = datetime, 
+         water_height_cm = Stage_mm /10, 
+         site_code = "aspen")%>%
+  dplyr::select(site_code, DT, water_height_cm)
+
+greyrock <- read_csv("data/flow_kampf/greyrock_stage_composite.csv")%>%
+  mutate(DT = datetime, 
+         water_height_cm = Stage_mm /10, 
+         site_code = "greyrock")%>%
+  dplyr::select(site_code, DT, water_height_cm)
+
+bl4 <- read_csv("data/flow_kampf/bl4_stage_composite.csv")%>%
+  mutate(DT = datetime, 
+         water_height_cm = Stage_mm /10, 
+         site_code = "bl4")%>%
+  dplyr::select(site_code, DT, water_height_cm)
+
+
+stage_df <- rbind(aspen, greyrock, bl4)%>%
+  mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M"))
+
+source("flow/kampf_caprod_format.R")
+manual_measurements <- manual_measurements_kampf
+```
+
 ## *Visual*
 
 -   *Check for missing data, weird dates, see if there are any 0s near site visits.*
@@ -121,7 +159,7 @@ master_visual <- stage_df %>%
   geom_line()
 plot(master_visual)
 
-indv_visual <- filter(stage_df, site_code == "SAWM") %>%
+indv_visual <- filter(stage_df, site_code == "bl4") %>%
   ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
   geom_line()
 plot(indv_visual)
@@ -227,7 +265,7 @@ write_csv(stage_df, "data/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
 ```{r}
 # fit column names to match argument names in functions
 manual_measurements_for_func <- manual_measurements %>% 
-  select(site_name = site_code, 
+  dplyr::select(site_name = site_code, 
          start_date = first_measurement_DT,
          end_date = last_measurement_DT,
          manual_start = first_measurement_cm, 
@@ -254,10 +292,10 @@ corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
 ```{r}
 # change site names to whatever site you want to look at
 indv_corrected_df <- filter(corrected_df, 
-                            site_code == "LBEA")
+                            site_code == "greyrock")
 
 indv_manual_measurements <- filter(manual_measurements_for_func, 
-                                   site_name == "LBEA")
+                                   site_name == "greyrock")
  
   
  indv_corrected_graph <- ggplot() +
@@ -276,6 +314,8 @@ indv_manual_measurements <- filter(manual_measurements_for_func,
 # ^Interactive graph^
  
 plot(indv_corrected_graph)
+
+#ggsave("output/greyrock corrected.jpg", width = 16, height = 10)
 ```
 
 ## *Splitting sites where caprod was moved*
@@ -839,7 +879,7 @@ ggplotly(extrapolated_stage_Q)
 
 # *Exporting Q files*
 
-*Save into folder "data/Provisional_Q_stage_data"*
+*Save into folder "data/Provisional_Q\_stage_data"*
 
 ```{r}
 folder <- "data/Provisional_Q_stage_data/"
