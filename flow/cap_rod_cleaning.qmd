@@ -113,6 +113,8 @@ manual_measurements <- read.csv(field_stage) %>%
 
 ### Kampf lab importing
 
+[**DO NOT RUN THIS CHUNK UNLESS USING KAMPF DATA!**]{.underline}
+
 Kampf lab has a long term dataset that has been managed over the years by various folks. This chunk will read in and combine their composite files to match the format from the chunk above.
 
 Eventually, this workflow many be modified to read in raw data so that the workflow is completely reproducible.
@@ -140,8 +142,11 @@ bl4 <- read_csv("data/flow_kampf/bl4_stage_composite.csv")%>%
   dplyr::select(site_code, DT, water_height_cm)
 
 
-kampf_stage_df <- rbind(aspen, greyrock, bl4)%>%
+stage_df <- rbind(aspen, greyrock, bl4)%>%
   mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M"))
+
+source("flow/kampf_caprod_format.R")
+manual_measurements <- manual_measurements_kampf
 ```
 
 ## *Visual*
@@ -149,12 +154,12 @@ kampf_stage_df <- rbind(aspen, greyrock, bl4)%>%
 -   *Check for missing data, weird dates, see if there are any 0s near site visits.*
 
 ```{r}
-master_visual <- kampf_stage_df %>%
+master_visual <- stage_df %>%
   ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
   geom_line()
 plot(master_visual)
 
-indv_visual <- filter(kampf_stage_df, site_code == "bl4") %>%
+indv_visual <- filter(stage_df, site_code == "bl4") %>%
   ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
   geom_line()
 plot(indv_visual)
@@ -260,7 +265,7 @@ write_csv(stage_df, "data/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
 ```{r}
 # fit column names to match argument names in functions
 manual_measurements_for_func <- manual_measurements %>% 
-  select(site_name = site_code, 
+  dplyr::select(site_name = site_code, 
          start_date = first_measurement_DT,
          end_date = last_measurement_DT,
          manual_start = first_measurement_cm, 
@@ -287,10 +292,10 @@ corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
 ```{r}
 # change site names to whatever site you want to look at
 indv_corrected_df <- filter(corrected_df, 
-                            site_code == "LBEA")
+                            site_code == "greyrock")
 
 indv_manual_measurements <- filter(manual_measurements_for_func, 
-                                   site_name == "LBEA")
+                                   site_name == "greyrock")
  
   
  indv_corrected_graph <- ggplot() +
@@ -309,6 +314,8 @@ indv_manual_measurements <- filter(manual_measurements_for_func,
 # ^Interactive graph^
  
 plot(indv_corrected_graph)
+
+#ggsave("output/greyrock corrected.jpg", width = 16, height = 10)
 ```
 
 ## *Splitting sites where caprod was moved*
