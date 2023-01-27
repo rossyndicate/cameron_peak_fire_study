@@ -111,17 +111,50 @@ manual_measurements <- read.csv(field_stage) %>%
                                           format = "%m/%d/%Y %H:%M", tz = "MST"))
 ```
 
+### Kampf lab importing
+
+Kampf lab has a long term dataset that has been managed over the years by various folks. This chunk will read in and combine their composite files to match the format from the chunk above.
+
+Eventually, this workflow many be modified to read in raw data so that the workflow is completely reproducible.
+
+```{r kampf import}
+
+#could probably functionalize this, Megan!
+
+aspen <- read_csv("data/flow_kampf/aspen_stage_composite.csv")%>%
+  mutate(DT = datetime, 
+         water_height_cm = Stage_mm /10, 
+         site_code = "aspen")%>%
+  dplyr::select(site_code, DT, water_height_cm)
+
+greyrock <- read_csv("data/flow_kampf/greyrock_stage_composite.csv")%>%
+  mutate(DT = datetime, 
+         water_height_cm = Stage_mm /10, 
+         site_code = "greyrock")%>%
+  dplyr::select(site_code, DT, water_height_cm)
+
+bl4 <- read_csv("data/flow_kampf/bl4_stage_composite.csv")%>%
+  mutate(DT = datetime, 
+         water_height_cm = Stage_mm /10, 
+         site_code = "bl4")%>%
+  dplyr::select(site_code, DT, water_height_cm)
+
+
+kampf_stage_df <- rbind(aspen, greyrock, bl4)%>%
+  mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M"))
+```
+
 ## *Visual*
 
 -   *Check for missing data, weird dates, see if there are any 0s near site visits.*
 
 ```{r}
-master_visual <- stage_df %>%
+master_visual <- kampf_stage_df %>%
   ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
   geom_line()
 plot(master_visual)
 
-indv_visual <- filter(stage_df, site_code == "SAWM") %>%
+indv_visual <- filter(kampf_stage_df, site_code == "bl4") %>%
   ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
   geom_line()
 plot(indv_visual)
