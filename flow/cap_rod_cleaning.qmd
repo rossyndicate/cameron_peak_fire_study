@@ -22,7 +22,7 @@ library(plotly)
 
 *'driftR\` package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder:*
 
-```{r}
+```{r driftR_source}
 source("flow/driftR_functions/dr_correctOne.R")
 source("flow/driftR_functions/dr_correctTwo.R")
 source("flow/driftR_functions/dr_drop.R")
@@ -77,7 +77,7 @@ source("flow/driftR_functions/sondeRaw.R")
 
         1.  *Q_cfs is read in a different chunk*
 
-```{r}
+```{r import_sensor_manual}
 # location of raw data files
 folder_path <- paste0(getwd(),"/data/all_sites_caprod_data")
 
@@ -111,15 +111,15 @@ manual_measurements <- read.csv(field_stage) %>%
                                           format = "%m/%d/%Y %H:%M", tz = "MST"))
 ```
 
-### Kampf lab importing
+### Kampf Version
 
-[**DO NOT RUN THIS CHUNK UNLESS USING KAMPF DATA!**]{.underline}
+[**DO NOT RUN THIS CHUNK or other chunks named "Kampf Version" UNLESS USING KAMPF DATA!**]{.underline}
 
 Kampf lab has a long term dataset that has been managed over the years by various folks. This chunk will read in and combine their composite files to match the format from the chunk above.
 
 Eventually, this workflow many be modified to read in raw data so that the workflow is completely reproducible.
 
-```{r kampf import}
+```{r kampf_import_sensor_manual}
 
 #could probably functionalize this, Megan!
 
@@ -153,22 +153,37 @@ manual_measurements <- manual_measurements_kampf
 
 -   *Check for missing data, weird dates, see if there are any 0s near site visits.*
 
-```{r}
+```{r pre_clean_visual}
 master_visual <- stage_df %>%
   ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
-  geom_line()
+  geom_line()+
+  geom_point(data = manual_measurements, aes(x = first_measurement_DT, 
+                                                  y = first_measurement_cm, color = site_code)) +
+  theme_bw()
 plot(master_visual)
 
 indv_visual <- filter(stage_df, site_code == "bl4") %>%
   ggplot(aes(x = DT, y = water_height_cm, color = site_code)) +
-  geom_line()
-plot(indv_visual)
+  geom_line()+
+  geom_point(data = filter(manual_measurements, site_code == "bl4"), aes(x = first_measurement_DT, 
+                                                  y = first_measurement_cm),
+             color = "blue") +
+  theme_bw()
+   
+ggplotly(indv_visual)
 ```
 
 ## *Export uncleaned stage across all sites*
 
-```{r}
+```{r compiled_export}
 write_csv(stage_df, "data/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
+```
+
+### Kampf Version
+
+```{r kampf_compiled_export}
+
+write_csv(stage_df, "data/flow_kampf/stage_combined_UNCLEAN.csv")
 ```
 
 # *Field data adjustments*
@@ -182,7 +197,7 @@ write_csv(stage_df, "data/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
 
 ## *Functions to subset and adjust stage values*
 
-```{r}
+```{r subset_adjust_functions}
 # function to adjust sensor stage values to match the start measurement  
 
   adjust_stage <- function(site_name, start_date, end_date,
@@ -262,7 +277,34 @@ write_csv(stage_df, "data/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
 
 *Using the functions written above and pmap, we can map over the manual measurements df and preform the adjustments.*
 
-```{r}
+```{r adjusting}
+# fit column names to match argument names in functions
+manual_measurements_for_func <- manual_measurements %>% 
+  dplyr::select(site_name = site_code, 
+         start_date = first_measurement_DT,
+         end_date = last_measurement_DT,
+         manual_start = first_measurement_cm, 
+         manual_end = last_measurement_cm) %>%
+  # NA values will break the functions, get rid of em!
+  na.omit() %>%
+  # pmap_dfr needs tibbles :)
+  as_tibble()
+
+##PMAP FOR ADJUSTMENT FUNCTIONS!##
+
+# steps df for each subset between site visits to match the start measurement
+stepped_df <- pmap_dfr(manual_measurements_for_func, adjust_stage)
+
+# creates a time factor for each subset using the `driftR` factor function
+factor_df <- pmap_dfr(manual_measurements_for_func, dr_factor_subset)
+
+# using factor and last 4 measurements from manual end, corrects for drift so that the manual end and the end measurement match up
+corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
+```
+
+### Kampf Version
+
+```{r kampf_adjustment}
 # fit column names to match argument names in functions
 manual_measurements_for_func <- manual_measurements %>% 
   dplyr::select(site_name = site_code, 
@@ -289,13 +331,45 @@ corrected_df <- pmap_dfr(manual_measurements_for_func, dr_correctOne_subset)
 
 ### *Graphing to check work*
 
-```{r}
+```{r check_adjust}
 # change site names to whatever site you want to look at
 indv_corrected_df <- filter(corrected_df, 
-                            site_code == "greyrock")
+                            site_code == "SAWM")
 
 indv_manual_measurements <- filter(manual_measurements_for_func, 
-                                   site_name == "greyrock")
+                                   site_name == "SAWM")
+ 
+  
+ indv_corrected_graph <- ggplot() +
+  geom_line(data = indv_corrected_df, aes(x = DT , y = water_height_cm), 
+            color = "red") +
+  geom_line(data = indv_corrected_df, aes(x = DT , y = corrected_stage_cm), 
+            color = "black") +
+  geom_line(data = indv_corrected_df, aes(x = DT , y = adjusted_stage), 
+            color = "green", alpha = .5) +
+  geom_point(data = indv_manual_measurements, aes(x = start_date, 
+                                                  y = manual_start),
+             color = "blue") +
+   theme_bw()
+ 
+#ggplotly(indv_corrected_graph)
+# ^Interactive graph^
+ 
+plot(indv_corrected_graph)
+
+
+```
+
+Kampf Version
+
+```{r kampf_check_adjust}
+
+# change site names to whatever site you want to look at
+indv_corrected_df <- filter(corrected_df, 
+                            site_code == "bl4")
+
+indv_manual_measurements <- filter(manual_measurements_for_func, 
+                                   site_name == "bl4")
  
   
  indv_corrected_graph <- ggplot() +
@@ -316,6 +390,7 @@ indv_manual_measurements <- filter(manual_measurements_for_func,
 plot(indv_corrected_graph)
 
 #ggsave("output/greyrock corrected.jpg", width = 16, height = 10)
+
 ```
 
 ## *Splitting sites where caprod was moved*
@@ -324,7 +399,7 @@ plot(indv_corrected_graph)
 
 *This section can be skipped if sensors do not move locations.*
 
-```{r}
+```{r site_split}
 
 # This dataframe contains the old names, new names and start/end dates for the name changes
 rename_df <- data.frame(old_name = c("LBEA", "LBEA", "SHEP","SHEP"), 
@@ -388,7 +463,7 @@ unique(corrected_df$site_code)
 
 -   *Any additional: Explained in notes*
 
-```{r}
+```{r flagging}
 # 4 columns:
 # start_dt <- when flag starts
 # end_dt <- when flag ends
@@ -437,7 +512,7 @@ plot(indv_site_flags)
 
 ### *Exporting 15 min stage data*
 
-```{r}
+```{r export_15}
 final_stage_df<- correct_and_flagged_df %>%
   select(DT, 
          site_code, 
@@ -457,17 +532,37 @@ write.csv(final_stage_df,
 
 ```
 
+#### Kampf 15 min
+
+```{r kampf_export_15}
+
+final_stage_df<- corrected_df %>%
+  select(DT, 
+         site_code, 
+         sensor_stage_cm = water_height_cm, 
+         adjustment_cm = adjustment,
+         adjusted_stage_cm = adjusted_stage,
+         time_correction_value = corrFac, 
+         corrected_stage_cm,
+         date, 
+         time)
+
+write.csv(final_stage_df,
+          "data/Provisional_Q_stage_data/corrected_15min_stage_KAMPF_EXAMPLE.csv")
+
+```
+
 ## *Computing daily averages*
 
-```{r}
+```{r daily_mean}
 # take mean for each created stage value
 daily_means_stage <- corrected_df %>%
-  select(water_height_cm, corrected_stage_cm, adjusted_stage, date, site_code) %>%
+  dplyr::select(water_height_cm, corrected_stage_cm, adjusted_stage, date, site_code) %>%
   group_by(date, site_code) %>%
   dplyr:: summarise(mean_sensor_stage_cm = mean(water_height_cm),
          mean_adjusted_stage_cm = mean(adjusted_stage),
          mean_corrected_stage_cm = mean(corrected_stage_cm)) %>%
-  ungroup() %>%
+  ungroup()%>%
   ## IGNORE UNLESS YOU NEED TO MATCH GRAB SAMPLES UP TO SITES
   mutate(site_label = ifelse(site_code %in% c("LBEA1", "LBEA2"), "LBEA",
                       ifelse(site_code %in% c("SHEP1", "SHEP2"), "SHEP", 
@@ -532,24 +627,56 @@ daily_means_stage_w_samples <- correct_and_flagged_daily_df %>%
             by = c("site_label", "date"))
 
 # plot to make sure everything looks correct and that no data is missing. 
-sample_plot <- filter(daily_means_stage_w_samples, site_code == "FISH") %>%
+sample_plot <- filter(daily_means_stage_stage_w_samples, site_code == "SAWM") %>%
   ggplot() +
   geom_line(aes(x = date, y = mean_corrected_stage_cm, group = site_code, 
                 color = flag_type)) +
   geom_line(aes(x = date, y = mean_sensor_stage_cm, group = site_code, 
-                color = flag_type)) +
+                #color = flag_type
+                ))+
   scale_color_manual(values = flag_colors) +
-  # geom_line(aes(x = date, y = mean_corrected_stage_cm, 
-  # color = "red" ))+
   geom_point(aes(x = date, y = count,
-                 color = "grey"))
+                 color = "grey"))+
+   theme_bw(base_size = 24)+
+  ylab("Daily Mean Stage (cm)")
 
 plot(sample_plot)
+
+```
+
+### Kampf Version
+
+```{r kampf_daily_mean}
+
+daily_means_stage <- corrected_df %>%
+  dplyr::select(water_height_cm, corrected_stage_cm, adjusted_stage, date, site_code) %>%
+  group_by(date, site_code) %>%
+  dplyr:: summarise(mean_sensor_stage_cm = mean(water_height_cm),
+         mean_adjusted_stage_cm = mean(adjusted_stage),
+         mean_corrected_stage_cm = mean(corrected_stage_cm)) %>%
+  ungroup() 
+
+# plot to make sure everything looks correct and that no data is missing. 
+sample_plot <- filter(daily_means_stage, site_code == "bl4") %>%
+  ggplot() +
+  geom_line(aes(x = date, y = mean_corrected_stage_cm, group = site_code, 
+                #color = flag_type
+                ), color = "red") +
+  geom_line(aes(x = date, y = mean_sensor_stage_cm, group = site_code, 
+                #color = flag_type
+                ), color = "blue")+
+  theme_bw(base_size = 24)+
+  ylab("Daily Mean Stage (cm)")
+
+
+plot(sample_plot)
+
+
 ```
 
 ## *Exporting corrected daily means data*
 
-```{r}
+```{r export_daily}
 # write daily averages file matched up with samples
 final_daily_means_stage <- daily_means_stage_w_samples %>%
   select(date, 
@@ -564,7 +691,24 @@ final_daily_means_stage <- daily_means_stage_w_samples %>%
          site_label)
 
 write_csv(final_daily_means_stage, 
-          "data/Provisional_Q_stage_data/stage_daily_mean_and_samples_cleaned.csv")
+          "data/Provisional_Q_stage_data/stage_daily_mean_and_samples_cleaned_KAMPF_EXAMPLE.csv")
+```
+
+### Kampf Version
+
+```{r kampf_export_daily}
+
+final_daily_means_stage <- daily_means_stage %>%
+  dplyr::select(date, 
+         site_code,
+         mean_sensor_stage_cm,
+         mean_adjusted_stage_cm,
+         mean_corrected_stage_cm)
+
+write_csv(final_daily_means_stage, 
+          "data/Provisional_Q_stage_data/stage_daily_mean_and_samples_cleaned_KAMPF_EXAMPLE.csv")
+
+
 ```
 
 # *Calculating Q*
@@ -579,17 +723,17 @@ write_csv(final_daily_means_stage,
 
 *FOR LARGER DATASETS USE THIS PACKAGE. NEEDS FUNCTION DEVELOPMENT TO MAP THROUGH MULTIPLE SITES. THE CODE IN BELOW CHUNK IS USING AN EXAMPLE DATASET PROVIDED WITH THE PACKAGE.*
 
-```{r}
+```{r bdrc}
 
-library("bdrc")
-
-data(krokfors)
-
-gplm.fit <- gplm(Q ~ W, krokfors)
-
-summary(gplm.fit)
-
-plot(gplm.fit)
+# library("bdrc")
+# 
+# data(krokfors)
+# 
+# gplm.fit <- gplm(Q ~ W, krokfors)
+# 
+# summary(gplm.fit)
+# 
+# plot(gplm.fit)
 
 ```
 
@@ -605,7 +749,7 @@ plot(gplm.fit)
 
 5.  *EXTRAPOLATION_Q\_sensor_daily*
 
-```{r}
+```{r Q_calc_functions}
 create_rating_curve <- function(site) {
   
   site_manual_h_q <- h_q_df %>%
@@ -759,13 +903,14 @@ Steps:
 
     2.  IF Q IS DESIRED TO BE EXTRAPOLATED, USE EXTRAPOLATION_Q\_sensor_15min and EXTRAPOLATION_Q\_sensor_daily (**not recommended**)
 
-### Manual stage/Q import, cleaning and model creation
+## Manual stage/Q import, cleaning and model creation
 
-```{r}
+```{r rating_curve_model}
 #Import csv with measurement DT, stage H and measured Q
 manual_h_q <- read.csv("data/manual_stage_Q_jan2023.csv") %>%
   mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M", tz = "MST")) %>%
   na.omit(Q_cfs)
+
 
 #########################
 # if site was split, use this section
@@ -799,6 +944,8 @@ site_list <- data.frame(site = c("FISH", "SAWM", "BLAK", "PENN",
                                  "BEAV", "BENN", "LBEA1", "SHEP1")) %>%
   as_tibble()
 
+
+
 # using manual dataframe to create coefficients for each site
 manual_H_Q_rc <- pmap_dfr(site_list, create_rating_curve)
 
@@ -812,19 +959,62 @@ double_check_model <- manual_H_Q_rc %>%
   facet_wrap(~site_code)
 
 plot(double_check_model)  
+
+r2_values <- dplyr::select(manual_H_Q_rc, c(site_code, r2))%>%
+  distinct(site_code, .keep_all = TRUE)
+head(r2_values)
 ```
 
-### *15 min Q calculations*
+###  Kampf version
 
-```{r}
+```{r kampf_rating_curve_model}
+
+
+#For Kampf data use site_list and kampf_stage_Q_means sourced from kampf_caprod_format.R
+site_list <- as_tibble(site_list)%>%
+  rename(site = site_name)
+
+h_q_df <- kampf_stage_Q_means%>%
+  dplyr::select(site_code, 
+         H = manual_stage_cm, 
+         Q  = q_cfs)
+# using manual dataframe to create coefficients for each site
+manual_H_Q_rc <- pmap_dfr(site_list, create_rating_curve)
+
+# double check that modelled Q matches measured Q
+double_check_model <- manual_H_Q_rc %>%
+  ggplot() +
+  geom_point(aes(x = H, y = Q), color = "blue") +
+  geom_point(aes(x = H, y = Q_cfs), color = "red") +
+  geom_line(aes(x = H, y = Q_cfs), color = "green") +
+  theme_bw() +
+  facet_wrap(~site_code)
+
+plot(double_check_model)  
+
+r2_values <- dplyr::select(manual_H_Q_rc, c(site_code, r2))%>%
+  distinct(site_code, .keep_all = TRUE)
+head(r2_values)
+
+
+
+```
+
+## *15 min Q calculations*
+
+```{r 15min_Q}
+
+
 # calculate bounded Q for 15min data for all sites in site_list
 stage_Q_15min <- pmap_dfr(site_list, calc_Q_for_sensor_stage_15min)
 
 # view indv sites in plot
-double_check_stage_Q <- filter(stage_Q_15min, site_code == "LBEA1") %>%
+double_check_stage_Q <- filter(stage_Q_15min, site_code == "SAWM") %>%
   ggplot() +
-  geom_line(aes(x = DT, y = Q_cfs, group = site_code, color = flag_type)) +
-  scale_color_manual(values = flag_colors) +
+  geom_line(aes(x = DT, y = Q_cfs, group = site_code, 
+                #color = flag_type
+                )) +
+  #scale_color_manual(values = flag_colors) +
   theme_bw()
 
 plot(double_check_stage_Q)
@@ -835,19 +1025,55 @@ EXTRAPOLATED_stage_Q_15min <- pmap_dfr(site_list, EXTRAPOLATION_Q_sensor_15min)
 
 extrapolated_stage_Q <-
   ggplot() +
-  geom_line(data = filter(stage_Q_15min , site_code == "SAWM"), 
-            aes(x = DT, y = Q_cfs, color = "blue")) +
   geom_line(data = filter(EXTRAPOLATED_stage_Q_15min, site_code == "SAWM"),
-            aes(x = DT, y = Q_cfs, color = "red")) +
+            aes(x = DT, y = Q_cfs), color = "blue") +
+  geom_line(data = filter(stage_Q_15min , site_code == "SAWM"), 
+            aes(x = DT, y = Q_cfs), color = "red") +
+  scale_color_manual(values = flag_colors)+
+  theme_bw()
+
+plot(extrapolated_stage_Q)
+```
+
+### Kampf Version
+
+```{r kampf_15min_Q }
+
+# calculate bounded Q for 15min data for all sites in site_list
+stage_Q_15min <- pmap_dfr(site_list, calc_Q_for_sensor_stage_15min)
+
+# view indv sites in plot
+double_check_stage_Q <- filter(stage_Q_15min, site_code == "bl4") %>%
+  ggplot() +
+  geom_line(aes(x = DT, y = Q_cfs, group = site_code, 
+                #color = flag_type
+                )) +
+  #scale_color_manual(values = flag_colors) +
+  theme_bw()
+
+plot(double_check_stage_Q)
+
+### EXTRAPOLATION DANGER ZONE ###
+# USE EXTRAPOLATED AT OWN RISK, ERROR MAY BE PROPAGATED
+EXTRAPOLATED_stage_Q_15min <- pmap_dfr(site_list, EXTRAPOLATION_Q_sensor_15min)
+
+extrapolated_stage_Q <- ggplot() +
+  geom_line(data = filter(EXTRAPOLATED_stage_Q_15min, site_code == "bl4"),
+            aes(x = DT, y = Q_cfs),  color = "red") +
+  geom_line(data = filter(stage_Q_15min , site_code == "bl4"), 
+            aes(x = DT, y = Q_cfs), color = "blue") +
   #scale_color_manual(values = flag_colors)+
   theme_bw()
 
-ggplotly(extrapolated_stage_Q)
+plot(extrapolated_stage_Q)
+
 ```
 
-### *Daily Q calculations*
+## *Daily Q calculations*
 
-```{r}
+```{r dailyQ}
+
+
 # calculate bounded Q for daily data for all sites in site_list
 stage_Q_daily <- pmap_dfr(site_list, calc_Q_for_sensor_stage_daily)
 
@@ -867,21 +1093,56 @@ EXTRAPOLATED_stage_Q_daily <- pmap_dfr(site_list, EXTRAPOLATION_Q_sensor_daily)
 
 extrapolated_stage_Q <-
   ggplot() +
-  geom_line(data = filter(stage_Q_daily, site_code == "SHEP1"),
-            aes(x = date, y = Q_cfs, color = "blue")) +
-  geom_line(data = filter(EXTRAPOLATED_stage_Q_daily, site_code == "SHEP1"),
-            aes(x = date, y = Q_cfs, color = "red")) +
+  geom_line(data = filter(EXTRAPOLATED_stage_Q_daily, site_code == "SAWM"),
+            aes(x = date, y = Q_cfs), color = "red") +
+  geom_line(data = filter(stage_Q_daily, site_code == "SAWM"),
+            aes(x = date, y = Q_cfs), color = "blue") +
+  
   # scale_color_manual(values = flag_colors) +
   theme_bw()
 
 ggplotly(extrapolated_stage_Q)
 ```
 
+#### Kampf Version
+
+```{r kampf_dailyQ}
+
+# calculate bounded Q for daily data for all sites in site_list
+stage_Q_daily <- pmap_dfr(site_list, calc_Q_for_sensor_stage_daily)
+
+# view all sites in plotly
+double_check_stage_Q <- stage_Q_daily %>%
+  ggplot() +
+  geom_line(aes(x = date, y = Q_cfs, group = site_code, color = site_code)) +
+  # scale_color_manual(values = flag_colors) +
+  theme_bw()
+
+ggplotly(double_check_stage_Q)
+
+### EXTRAPOLATION DANGER ZONE ###
+# USE EXTRAPOLATED AT OWN RISK, ERROR MAY BE PROPAGATED
+
+EXTRAPOLATED_stage_Q_daily <- pmap_dfr(site_list, EXTRAPOLATION_Q_sensor_daily)
+
+extrapolated_stage_Q <-
+  ggplot() +
+  geom_line(data = filter(EXTRAPOLATED_stage_Q_daily, site_code == "aspen"),
+            aes(x = date, y = Q_cfs), color = "red") +
+  geom_line(data = filter(stage_Q_daily, site_code == "aspen"),
+            aes(x = date, y = Q_cfs), color = "blue") +
+  
+  # scale_color_manual(values = flag_colors) +
+  theme_bw()
+
+plot(extrapolated_stage_Q)
+```
+
 # *Exporting Q files*
 
 *Save into folder "data/Provisional_Q\_stage_data"*
 
-```{r}
+```{r exporting_Q}
 folder <- "data/Provisional_Q_stage_data/"
 
 write_csv(stage_Q_15min, 
@@ -895,6 +1156,27 @@ write_csv(EXTRAPOLATED_stage_Q_15min,
 
 write_csv(EXTRAPOLATED_stage_Q_daily, 
           paste0(folder, "EXTRAPOLATED_stage_Q_daily_CPF2022.csv"))
+```
+
+### Kampf Version
+
+```{r kampf_exporting_Q}
+
+folder <- "data/flow_kampf/"
+
+write_csv(stage_Q_15min, 
+          paste0(folder, "stage_Q_15min_KAMPF_EXAMPLE.csv"))
+
+write_csv(stage_Q_daily, 
+          paste0(folder, "stage_Q_15min_KAMPF_EXAMPLE.csv"))
+
+write_csv(EXTRAPOLATED_stage_Q_15min, 
+          paste0(folder, "EXTRAPOLATED_stage_Q_15min_KAMPF_EXAMPLE.csv"))
+
+write_csv(EXTRAPOLATED_stage_Q_daily, 
+          paste0(folder, "EXTRAPOLATED_stage_Q_daily_KAMPF_EXAMPLE.csv"))
+
+
 ```
 
 *End*
