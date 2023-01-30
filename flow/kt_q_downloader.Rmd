@@ -80,7 +80,18 @@ final_meta <- bind_rows(clp_meta, bigt_meta) %>%
          dataType = as.character(dataType),
          elevation = as.numeric(elevation),
          lat = as.numeric(lat),
-         long = as.numeric(long)) 
+         long = as.numeric(long), 
+        site_desc = case_when(grepl("Fort Collins - ", description) 
+                                                                  ~ gsub(replacement = "", "Fort Collins - ", x = description),
+                                grepl("Greeley - ", description) 
+                                                                  ~ gsub(replacement = "", "Greeley - ", x = description),
+                                grepl("Loveland - ", description) 
+                                                                  ~ gsub(replacement = "", "Loveland - ", x = description), 
+                                grepl("Larimer - ", description) 
+                                                                  ~ gsub(replacement = "", "Larimer - ", x = description), 
+                             grepl("Windsor - ", description) 
+                                                                  ~ gsub(replacement = "", "Windsor - ", x = description),
+                             description == "Poudre River at Hewlett Gulch Bridge" ~ "Poudre River at Hewlett Gulch Bridge")) 
 ```
 
 Discharge data:
