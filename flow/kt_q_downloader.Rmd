@@ -1,0 +1,196 @@
+---
+title: "larimer_q_downloader"
+author: "Katie Willi"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(jsonlite)
+library(httr)
+```
+
+###### Alternative workflow for `larimer_q_downloader`
+
+Sites of interest:
+```{r}
+clp_stations <-  c("11531", "11530", "11525", "11514", "11004", "11515",
+                   "11518", "11517", "11516", "6770", "11083", "11082",
+                   "11009","7130","10408", "11021")
+
+bigt_stations <- c("11567", "11566", "11564", "11563", "11562", "11561",
+                   "11560", "11559", "11558", "95100", "95000", "3640",
+                   "3610", "3570", "3520")
+```
+
+Getting meta-data
+```{r}
+meta_urler <- function(stations){
+  
+  # sub-test it:
+  # stations <- "11567"
+  
+  url <- paste0("https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/",
+                "stationSummaries?forOperatorStationDashboard=true&stationNumId=", stations, 
+                "&periodStart=2022-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
+                "T13:59:00-07:00")
+  
+  request <- httr::GET(url = url)
+  
+  total_list <- httr::content(request)
+  
+  basics <- total_list[["stationSummaries"]][[1]] %>% 
+    rbind() %>% 
+    as_tibble() %>%
+    dplyr::select(id, numId, name, elevation, lat = latitude, long = longitude)
+  
+  station_meta <- as.data.frame(do.call(rbind, 
+                                        total_list[["stationSummaries"]][[1]][["dataTypes"]] )) %>%
+    rename(dataType = name) %>%
+    cbind(basics)
+  
+  Sys.sleep(1)  
+  
+  return(station_meta)
+  
+}
+
+clp_meta <- clp_stations %>%
+  map(~ meta_urler(stations = .)) %>%
+  dplyr::bind_rows() %>%
+  mutate(WS = "CLP")
+
+bigt_meta <- bigt_stations %>%
+  map(~ meta_urler(stations = .)) %>%
+  dplyr::bind_rows() %>%
+  mutate(WS = "BigT")
+
+final_meta <- bind_rows(clp_meta, bigt_meta) %>% 
+  as.data.frame() %>%
+  dplyr::select(WS, description = name, id, numId, dataType, elevation, lat, long) %>%
+  # i think the list structure is making things funky... so explicitly calling 
+  # out what each column type is here:
+  mutate(WS = as.character(WS),
+         description = as.character(description),
+         id = as.numeric(id),
+         numId = as.numeric(numId),
+         dataType = as.character(dataType),
+         elevation = as.numeric(elevation),
+         lat = as.numeric(lat),
+         long = as.numeric(long)) 
+```
+
+Discharge data:
+```{r}
+q_sites <- final_meta %>%
+  filter(grepl("Discharge", dataType)) %>%
+  distinct(numId) %>%
+  unlist() %>%
+  unname()
+
+q_downloader <- function(q_sites){
+  
+  # sub-test it:
+  # q_sites <- "11518"
+  
+  url <- paste0("https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/",
+                "stationSummaries?forOperatorStationDashboard=true&stationNumId=", q_sites,
+                "&periodStart=2022-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
+                "T13:59:00-07:00")
+  
+  request <- httr::GET(url = url)
+  
+  total_list <- httr::content(request)
+  
+  discharge_rows <- as_tibble(do.call(rbind, 
+                                      total_list[["stationSummaries"]][[1]][["ts"]])) %>%
+    rowid_to_column() %>%
+    filter(grepl("Discharge",dataType)) %>%
+    pull(rowid)
+  
+  q_unlister <- function(discharge_rows){
+    
+    q_meta <- total_list[["stationSummaries"]][[1]][["ts"]][[as.numeric(discharge_rows)]] %>%
+      rbind() %>%
+      as.data.frame() %>%
+      dplyr::select(-c(data, properties))
+    
+    unlisted_q <- total_list[["stationSummaries"]][[1]][["ts"]][[as.numeric(discharge_rows)]][["data"]] %>%
+      bind_rows() %>%
+      mutate(locId = q_meta$locId) %>%
+      left_join(q_meta, by = "locId") %>%
+      as.data.frame()
+  
+    return(unlisted_q)
+    
+}
+  
+  flow <- discharge_rows %>%
+    map(~ q_unlister(discharge_rows = .)) %>%
+    dplyr::bind_rows()
+  
+  return(flow)
+  
+}
+
+q_for_all <- q_sites %>%
+  map(~ q_downloader(q_sites = .)) %>%
+  dplyr::bind_rows() %>%
+  as.data.frame() %>%
+  # funky lists, explicitly calling each column out:
+  mutate(dt = as.character(dt),
+         format = as.character(format),
+         f = as.character(f),
+         d = as.character(d),
+         v = as.numeric(v),
+         locId = as.numeric(locId),
+         dataType = as.character(dataType),
+         dataInterval = as.character(dataInterval),
+         description = as.character(description),
+         units = as.character(units),
+         valueDigits = as.character(valueDigits))
+```
+
+## Check the Q
+
+I'd recommend going to https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/100
+to double check and make sure the data looks similar to the sites you pulled
+
+```{r}
+test_df_q <- q_for_all %>%
+  mutate(datetime = lubridate::ymd_hms(dt),
+         q_cfs = as.numeric(v)) %>%
+  select(datetime, q_cfs, locId) %>%
+  as_tibble()
+
+test_df_q <- unlist(test_df_q)
+
+
+ggplot(data = test_df_q) +
+  geom_line(aes(x = unlist(datetime), y = q_cfs)) +
+  theme_bw() +
+facet_wrap(~ locId)
+
+test_df_q %>%
+  ggplot() +
+  geom_line(aes(x = dt, y = q_cfs)) +
+  theme_bw() +
+  facet_wrap(~ description)
+
+
+final_df_q<- clp_q_station_data%>%
+  mutate(nice_dt = substr(dt, 1, nchar(dt)-9),
+         datetime = as.POSIXct(dt, format = "%Y-%m-%dT%H:%M"), 
+         q_cfs = as.double(v) )
+
+plot_test_Q <- final_df_q %>%
+  ggplot(aes(x = datetime, y = q_cfs)) +
+  geom_line() +
+  theme_bw() +
+  facet_wrap(~ numId)
+
+plot(plot_test_Q)
+
+```
