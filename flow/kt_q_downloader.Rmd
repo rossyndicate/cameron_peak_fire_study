@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(jsonlite)
 library(httr)
+library(arrow)
 ```
 
 ###### Alternative workflow for `larimer_q_downloader`
@@ -79,7 +80,18 @@ final_meta <- bind_rows(clp_meta, bigt_meta) %>%
          dataType = as.character(dataType),
          elevation = as.numeric(elevation),
          lat = as.numeric(lat),
-         long = as.numeric(long)) 
+         long = as.numeric(long), 
+        site_desc = case_when(grepl("Fort Collins - ", description) 
+                                                                  ~ gsub(replacement = "", "Fort Collins - ", x = description),
+                                grepl("Greeley - ", description) 
+                                                                  ~ gsub(replacement = "", "Greeley - ", x = description),
+                                grepl("Loveland - ", description) 
+                                                                  ~ gsub(replacement = "", "Loveland - ", x = description), 
+                                grepl("Larimer - ", description) 
+                                                                  ~ gsub(replacement = "", "Larimer - ", x = description), 
+                             grepl("Windsor - ", description) 
+                                                                  ~ gsub(replacement = "", "Windsor - ", x = description),
+                             description == "Poudre River at Hewlett Gulch Bridge" ~ "Poudre River at Hewlett Gulch Bridge")) 
 ```
 
 Discharge data:
@@ -93,11 +105,11 @@ q_sites <- final_meta %>%
 q_downloader <- function(q_sites){
   
   # sub-test it:
-  # q_sites <- "11518"
+  #q_sites <- "11518"
   
   url <- paste0("https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/",
                 "stationSummaries?forOperatorStationDashboard=true&stationNumId=", q_sites,
-                "&periodStart=2022-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
+                "&periodStart=2015-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
                 "T13:59:00-07:00")
   
   request <- httr::GET(url = url)
@@ -119,8 +131,8 @@ q_downloader <- function(q_sites){
     
     unlisted_q <- total_list[["stationSummaries"]][[1]][["ts"]][[as.numeric(discharge_rows)]][["data"]] %>%
       bind_rows() %>%
-      mutate(locId = q_meta$locId) %>%
-      left_join(q_meta, by = "locId") %>%
+      mutate(locId = as.character(q_meta$locId)) %>%
+      #left_join(q_meta, by = "locId") %>%
       as.data.frame()
   
     return(unlisted_q)
@@ -137,20 +149,20 @@ q_downloader <- function(q_sites){
 
 q_for_all <- q_sites %>%
   map(~ q_downloader(q_sites = .)) %>%
-  dplyr::bind_rows() %>%
-  as.data.frame() %>%
-  # funky lists, explicitly calling each column out:
-  mutate(dt = as.character(dt),
-         format = as.character(format),
-         f = as.character(f),
-         d = as.character(d),
-         v = as.numeric(v),
-         locId = as.numeric(locId),
-         dataType = as.character(dataType),
-         dataInterval = as.character(dataInterval),
-         description = as.character(description),
-         units = as.character(units),
-         valueDigits = as.character(valueDigits))
+  list_rbind()
+
+
+
+meta_for_join <- final_meta%>%
+  filter(dataType == "DischargeRiver")%>%
+  mutate(locId = as.character(numId))%>%
+  distinct(locId, .keep_all = TRUE)
+
+q_for_all_wmeta <- q_for_all%>%
+  left_join(meta_for_join, by = "locId")%>%
+  mutate(datetime = lubridate::ymd_hms(dt),
+         q_cfs = as.numeric(v)) 
+  
 ```
 
 ## Check the Q
@@ -159,38 +171,29 @@ I'd recommend going to https://larimerco-ns5.trilynx-novastar.systems/novastar/o
 to double check and make sure the data looks similar to the sites you pulled
 
 ```{r}
-test_df_q <- q_for_all %>%
-  mutate(datetime = lubridate::ymd_hms(dt),
-         q_cfs = as.numeric(v)) %>%
+test_df_q <- q_for_all_wmeta %>%
+  filter( locId == "6770")%>%
   select(datetime, q_cfs, locId) %>%
   as_tibble()
 
-test_df_q <- unlist(test_df_q)
 
 
+
+#werks
 ggplot(data = test_df_q) +
   geom_line(aes(x = unlist(datetime), y = q_cfs)) +
-  theme_bw() +
+  theme_bw() 
 facet_wrap(~ locId)
 
-test_df_q %>%
-  ggplot() +
-  geom_line(aes(x = dt, y = q_cfs)) +
-  theme_bw() +
-  facet_wrap(~ description)
 
-
-final_df_q<- clp_q_station_data%>%
-  mutate(nice_dt = substr(dt, 1, nchar(dt)-9),
-         datetime = as.POSIXct(dt, format = "%Y-%m-%dT%H:%M"), 
-         q_cfs = as.double(v) )
-
-plot_test_Q <- final_df_q %>%
-  ggplot(aes(x = datetime, y = q_cfs)) +
-  geom_line() +
-  theme_bw() +
-  facet_wrap(~ numId)
-
-plot(plot_test_Q)
 
 ```
+
+# Exporting Q to arrow
+```{r}
+
+write_feather(q_for_all_wmeta, sink = "data/Q_modeling/larimer_co_2015-01-25_2023-01-30")
+
+```
+
+
