@@ -1,0 +1,59 @@
+---
+title: "DWR Q downloader"
+author: "Sam Struthers"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+source("package_loader.R")
+```
+
+## DWR CLP/ BIGT sites
+
+
+```{r SiteGrabber}
+
+test_url <- "https://dwr.state.co.us/Rest/GET/api/v2/surfacewater/surfacewatertsday/?format=json&dateFormat=dateOnly&fields=abbrev%2CmeasDate%2Cvalue%2CmeasUnit&encoding=deflate&abbrev=CLAFTCCO&min-measDate=10%2F01%2F2020&max-measDate=09%2F30%2F2022"
+
+
+clp <- get_huc(id = "10190007", type = "huc08")
+bigt <-get_huc(id = "10190006", type = "huc08")
+
+CLP_stations <- cdssr::get_sw_stations(water_district = 3)%>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+CLP_diversions <- cdssr::get_structures(water_district = 3)%>%
+  filter(!is.na(longdecdeg) &!is.na(longdecdeg))%>%
+  filter(structure_type %in% c("STREAM GAGE","RESERVOIR SYSTEM", "MEASURING POINT", "RESERVOIR", "DITCH"))%>%
+  st_as_sf(coords = c("longdecdeg", "latdecdeg"), crs = 4326)
+bigt_stations <- cdssr::get_sw_stations(water_district = 4)%>%
+  filter(!is.na(longitude)&!is.na(latitude))%>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+bigt_diversions <- cdssr::get_structures(water_district = 4)%>%
+  filter(!is.na(longdecdeg) &!is.na(longdecdeg))%>%
+  filter(structure_type %in% c("STREAM GAGE","RESERVOIR SYSTEM", "MEASURING POINT", "RESERVOIR", "DITCH"))%>%
+  st_as_sf(coords = c("longdecdeg", "latdecdeg"), crs = 4326)
+
+
+DWR_CLP_map <- mapview::mapview(CLP_stations, col.regions = "blue")+
+  mapview::mapview(CLP_diversions, col.regions = "red")+
+  #mapview::mapview(clp, col.regions = "green")+
+  mapview::mapview(bigt_stations, col.regions = "blue")+
+  mapview::mapview(bigt_diversions, col.regions = "red")
+  #mapview::mapview(bigt, col.regions = "cyan")
+
+DWR_CLP_map
+```
+
+
+## Station Q
+
+```{r}
+
+clp_stations_only <- dplyr::select(CLP_stations,station_num)%>%
+  st_drop_geometry()
+clp_dwr_q <- map(clp_stations_only, cdssr::get_sw_ts(station_number = clp_stations_only$station_num))%>%
+  list_rbind()
+```
+
+
