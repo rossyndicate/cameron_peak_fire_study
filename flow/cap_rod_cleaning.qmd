@@ -965,7 +965,7 @@ r2_values <- dplyr::select(manual_H_Q_rc, c(site_code, r2))%>%
 head(r2_values)
 ```
 
-###  Kampf version
+### Kampf version
 
 ```{r kampf_rating_curve_model}
 

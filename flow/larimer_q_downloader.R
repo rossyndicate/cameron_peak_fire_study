@@ -43,12 +43,13 @@ create_url_dt <- function(site_num){
   mid_url <- "&periodStart=2000-01-01T00:00:00-07:00&periodEnd="
   
   final_url <- tibble( site_num = site_num, 
-                      url = paste0(start_url, site_num, mid_url, end_dt))
+                      site_url = paste0(start_url, site_num, mid_url, end_dt))
   return(final_url)
 }
 
 #get all urls for Poudre and Big Thompson flow sites
-clp_urls_dt <- map_dfr(clp_Q_site_nums, create_url_dt)
+clp_urls_dt <- map_dfr(clp_Q_site_nums, create_url_dt)%>%
+  as.data.frame()
 bigt_urls_dt <- map_dfr(bigt_Q_site_nums, create_url_dt)
 
 
@@ -88,39 +89,61 @@ for( i in 1:length(clp_url_meta_test$site_url)){
 
 
 
-get_q_list <- function(site_num){
-  
-  dicharge_sensor_num <- filter(station_meta, numid == "site_num")%>%
-    
-    
-  # find list where discharge data is stored
-  
-  discharge_list <- total_list[["stationSummaries"]][[1]][["ts"]][[3]][["data"]]
-  
- unlist(dicharge_list[[i]])
+get_q <- function(site_num){
+ unlist(discharge_list[[i]])
 }
 
-site_num <- "11531"
-site_url <- ""
 
-get_q <- function(site_url, site_num){
-  
-  site_meta <- filter(final_meta, numid == "site_num")
+
+
+final_df_q <- data.frame()
+
+#get_q <- function(site_url, site_num){
+
+clp_urls_dt_test <- head(clp_urls_dt, 3)
+
+
+
+  for(i in 1:length(clp_urls_dt_test$site_url)){
   
   #create request to novastar website using url created above
-  request <-GET(url = site_url)
+  request <-GET(url = clp_urls_dt_test$site_url[i])
+  
+  #trouble shooting
+  #request <-GET(url = site_url)
+
+  #request<- GET(url = "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationDashboard=true&stationNumId=6770&periodStart=2000-01-01T09:33:34-07:00&periodEnd=2023-01-25T09:33:34-07:00")
   #gives content of httr pull
   total_list <- content(request)
   
-  discharge list ssu
+  #find list number where q is located
+  discharge_sensor_num <- filter(final_meta, numid == clp_urls_dt_test$site_num[i])
+  #discharge_sensor_num <- filter(final_meta, numid == "6770")
   
-  testing_wooooo <- map_dfr(seq(1, length(test2_Q), 1), get_q)%>%
-    mutate(numid = site_num)
+  q_list <- as.integer(as.character(discharge_sensor_num$DischargeRiver[1])) 
+  
+  q_list
+    # find list where discharge data is stored
+    
+  discharge_list <- total_list[["stationSummaries"]][[1]][["ts"]][[q_list]][["data"]]
+  
+  q_df <- map_dfr(seq(1, length(discharge_list), 1), get_q)%>%
+    mutate(numid = clp_urls_dt_test$site_num[i])
   
   Sys.sleep(10)
   
+  final_df_q<- rbind(final_df_q, q_df)
+  
 }
 
+final_df_q<- final_df_q%>%
+  mutate(datetime = as.POSIXct(dt), 
+         q_cfs = v)
 
-final_df_q <- map_dfr(somdf urls, get_q)
+plot_test_Q <- final_df_q%>%
+  ggplot(aes( x= datetime, y = q_cfs))+
+  geom_point()+
+  theme_bw()+
+  facet_wrap(~numid)
+plot(plot_test_Q)
 
