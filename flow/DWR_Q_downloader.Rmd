@@ -11,49 +11,100 @@ source("package_loader.R")
 
 ## DWR CLP/ BIGT sites
 
-
 ```{r SiteGrabber}
 
-test_url <- "https://dwr.state.co.us/Rest/GET/api/v2/surfacewater/surfacewatertsday/?format=json&dateFormat=dateOnly&fields=abbrev%2CmeasDate%2Cvalue%2CmeasUnit&encoding=deflate&abbrev=CLAFTCCO&min-measDate=10%2F01%2F2020&max-measDate=09%2F30%2F2022"
 
+
+
+#Station and diversion metadata
+CLP_stations <- cdssr::get_sw_stations(water_district = 3)
+CLP_diversions <- cdssr::get_structures(water_district = 3)
+bigt_stations <- cdssr::get_sw_stations(water_district = 4)
+bigt_diversions <- cdssr::get_structures(water_district = 4)
+
+#Combine all diversions
+all_diversions <- rbind(bigt_diversions, CLP_diversions)%>%
+  filter(!is.na(longdecdeg) &!is.na(longdecdeg))%>%
+  filter(structure_type %in% c("STREAM GAGE","RESERVOIR SYSTEM", "MEASURING POINT", "RESERVOIR", "DITCH"))%>%
+  st_as_sf(coords = c("longdecdeg", "latdecdeg"), crs = 4326)
+
+#combine all stations
+all_stations <- rbind(bigt_stations, CLP_stations)%>%
+  filter(!is.na(longitude)&!is.na(latitude))%>%
+  mutate(end_year = year(end_date),
+    status = case_when(end_year >= 2022 ~ "Active",
+                            end_year < 2022 ~ "Historical"))%>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+#pick out active sites
+active_usgs <- filter(all_stations,status == "Active"& data_source == "USGS")
+active_dwr <- filter(all_stations,status == "Active"& data_source == "DWR")
+
+
+
+
+```
+
+### Stations Map
+
+```{r}
+
+#Watershed areas
 
 clp <- get_huc(id = "10190007", type = "huc08")
 bigt <-get_huc(id = "10190006", type = "huc08")
 
-CLP_stations <- cdssr::get_sw_stations(water_district = 3)%>%
-  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
-CLP_diversions <- cdssr::get_structures(water_district = 3)%>%
-  filter(!is.na(longdecdeg) &!is.na(longdecdeg))%>%
-  filter(structure_type %in% c("STREAM GAGE","RESERVOIR SYSTEM", "MEASURING POINT", "RESERVOIR", "DITCH"))%>%
-  st_as_sf(coords = c("longdecdeg", "latdecdeg"), crs = 4326)
-bigt_stations <- cdssr::get_sw_stations(water_district = 4)%>%
-  filter(!is.na(longitude)&!is.na(latitude))%>%
-  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
-bigt_diversions <- cdssr::get_structures(water_district = 4)%>%
-  filter(!is.na(longdecdeg) &!is.na(longdecdeg))%>%
-  filter(structure_type %in% c("STREAM GAGE","RESERVOIR SYSTEM", "MEASURING POINT", "RESERVOIR", "DITCH"))%>%
-  st_as_sf(coords = c("longdecdeg", "latdecdeg"), crs = 4326)
+#Map!
+DWR_map <- mapview::mapview(active_usgs, col.regions = "blue", layer.name = "Active USGS Stations")+
+  mapview::mapview(active_dwr, col.regions = "orange", layer.name = "Active DWR Stations")+
+  mapview::mapview(filter(all_stations,status != "Active"), col.regions = "purple", layer.name = "Historical Stations")+
+  mapview::mapview(all_diversions, col.regions = "red", cex = 2, layer.name = "All Diversions")
+  # mapview::mapview(clp, col.regions = "green", layer.name = "CLP watershed")+
+  # mapview::mapview(bigt, col.regions = "cyan", layer.name = "Big Thompson Watershed")
 
 
-DWR_CLP_map <- mapview::mapview(CLP_stations, col.regions = "blue")+
-  mapview::mapview(CLP_diversions, col.regions = "red")+
-  #mapview::mapview(clp, col.regions = "green")+
-  mapview::mapview(bigt_stations, col.regions = "blue")+
-  mapview::mapview(bigt_diversions, col.regions = "red")
-  #mapview::mapview(bigt, col.regions = "cyan")
+DWR_map
 
-DWR_CLP_map
 ```
-
 
 ## Station Q
 
 ```{r}
 
-clp_stations_only <- dplyr::select(CLP_stations,station_num)%>%
-  st_drop_geometry()
-clp_dwr_q <- map(clp_stations_only, cdssr::get_sw_ts(station_number = clp_stations_only$station_num))%>%
-  list_rbind()
+#Loop over DWR sites to grab all available Q
+daily_station_Q  <- tibble()
+
+for(i in 1:length(all_stations$station_num)){
+  
+  single_site <- cdssr::get_sw_ts(station_number = all_stations$station_num[i])
+ daily_station_Q <- rbind(single_site, daily_station_Q  )
+  
+}
+#check units and type
+unique(daily_station_Q$meas_unit)
+unique(daily_station_Q$meas_type)
+
+unique(daily_station_Q$flag_a)
+
+
+cleaned_Q <- daily_station_Q%>%
+  filter(value >= 0)
 ```
 
+# Plotting DWR Data
 
+```{r}
+
+
+
+DWR_station_plot <- cleaned_Q %>%
+  ggplot(aes(x= datetime, y = value, color = flag_a, group = station_num ))+
+  geom_line()+
+  theme_bw()+
+  ylab("Daily Q cfs")+
+  xlab("Date")+
+  # scale_y_log10()+
+   facet_wrap(~abbrev)
+plot(DWR_station_plot)
+
+```
