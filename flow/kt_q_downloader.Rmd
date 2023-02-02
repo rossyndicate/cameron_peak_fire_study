@@ -11,6 +11,7 @@ library(tidyverse)
 library(jsonlite)
 library(httr)
 library(arrow)
+source("package_loader.R")
 ```
 
 ###### Alternative workflow for `larimer_q_downloader`
@@ -196,4 +197,47 @@ write_feather(q_for_all_wmeta, sink = "data/Q_modeling/larimer_co_2015-01-25_202
 
 ```
 
+# Looking for all sites
+
+```{r}
+
+look_test <- GET(url = "https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/stationSummaries?forOperatorStationSummary=true")
+look_content <- httr::content(look_test)
+
+look_final <- tibble()
+
+  for(i in 1:length(look_deeper)){
+  
+    column_names <- c("id", "numId", "name", "elevation", "lat", "long" )
+    
+ basics <- look_content[["stationSummaries"]][[i]] %>% 
+    rbind() %>% 
+    as_tibble() %>%
+    dplyr::select(id, numId, name, elevation, lat = latitude, long = longitude)%>%
+   mutate_at(.vars = column_names, .funs = list_flatten())
+
+  station_meta <- as.data.frame(do.call(rbind, 
+                                        look_content[["stationSummaries"]][[i]][["dataTypes"]] ))  %>%
+    mutate(dataType = as.character(name)) %>%
+    distinct(dataType)
+  %>%
+    rowid_to_column()%>%
+    cbind(basics)
+  
+  station_wider <- station_meta%>%
+    select(dataType, numId, id, name, lat, long, rowid)%>%
+    pivot_wider(., names_from = dataType, values_from = rowid )%>%
+    as_tibble()
+  
+  look_final <- bind_rows(look_final, station_wider)
+  }
+
+station_meta <- as.data.frame(do.call(rbind, sensor_list)) %>%
+    mutate(name = as.character(name))%>%
+    distinct(name)%>%
+
+  
+
+
+```
 
