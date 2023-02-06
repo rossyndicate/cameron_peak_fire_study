@@ -28,7 +28,9 @@ pack_req <- c("tidyverse",
               "janitor",
               "CDSS", 
               "devtools", 
-              "plotly")
+              "plotly", 
+              "arrow",
+              "jsonlite")
 package_load(pack_req)
 
 devtools::install_github("anguswg-ucsb/cdssr")
