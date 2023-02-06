@@ -21,6 +21,9 @@ CLP_stations <- cdssr::get_sw_stations(water_district = 3)
 CLP_diversions <- cdssr::get_structures(water_district = 3)
 bigt_stations <- cdssr::get_sw_stations(water_district = 4)
 bigt_diversions <- cdssr::get_structures(water_district = 4)
+extra_stations <- cdssr::get_sw_stations(water_district = 48)
+extra_stations_2 <- cdssr::get_sw_stations(water_district = 76)
+
 
 #Combine all diversions
 all_diversions <- rbind(bigt_diversions, CLP_diversions)%>%
@@ -29,18 +32,19 @@ all_diversions <- rbind(bigt_diversions, CLP_diversions)%>%
   st_as_sf(coords = c("longdecdeg", "latdecdeg"), crs = 4326)
 
 #combine all stations
-all_stations <- rbind(bigt_stations, CLP_stations)%>%
+all_stations <- rbind(bigt_stations, CLP_stations, extra_stations, extra_stations_2)%>%
   filter(!is.na(longitude)&!is.na(latitude))%>%
   mutate(end_year = year(end_date),
     status = case_when(end_year >= 2022 ~ "Active",
-                            end_year < 2022 ~ "Historical"))%>%
+                            end_year < 2022 ~ "Historical"), 
+    start_date = as.Date(start_date), 
+    end_date = as.Date(end_date))%>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
 #pick out active sites
 active_usgs <- filter(all_stations,status == "Active"& data_source == "USGS")
 active_dwr <- filter(all_stations,status == "Active"& data_source == "DWR")
-
-
+#write_csv_arrow(active_dwr, "data/Q_modeling/active_dwr_sites.csv")
 
 
 ```
