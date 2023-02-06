@@ -150,3 +150,17 @@ plot_brnr_ptrr <- brnr_ptrr_daily_q %>%
 plot(plot_brnr_ptrr)
 
 ggsave("output/brnr_ptrr_Q.jpg", width = 12, height = 8)
+
+
+
+
+### Map!
+
+all_q_sites <- read.csv("data/Q_modeling/compiled_q_locations.csv")%>%
+  filter(!is.na(long))%>%
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+clp_flowlines <- st_read("data/cpf_sbs/clp_flowlines.shp")
+
+mapview::mapview(all_q_sites, zcol = "data")+
+  mapview::mapview(clp_flowlines)
