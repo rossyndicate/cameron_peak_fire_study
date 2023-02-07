@@ -36,3 +36,9 @@ package_load(pack_req)
 devtools::install_github("anguswg-ucsb/cdssr")
 # Load package
 library(cdssr)
+
+
+remove(pack_req, package_load)
+
+
+       
