@@ -165,9 +165,14 @@ write_csv("data/Q_modeling/station_data.csv")
 # Downloading data
 
 Parameters available are:
-- Q
-- Precip
-- Stage
+
+\- Q
+
+\- Precip
+
+ - Stage
+
+## Downloader function
 
 ```{r download function}
 
@@ -176,7 +181,7 @@ data_downloader <- function(site_nums, parameter){
 
   url <- paste0("https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/",
                 "stationSummaries?forOperatorStationDashboard=true&stationNumId=", site_nums,
-                "&periodStart=2022-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
+                "&periodStart=2015-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
                 "T13:59:00-07:00")
   
   request <- httr::GET(url = url)
@@ -210,31 +215,34 @@ data_downloader <- function(site_nums, parameter){
   return(data)
   
 }
-
-   
-  
-
 ```
-
 
 ## Q:
 
+This section will download all the Q from the date set in the function up until the system date. The longer the time frame, the longer the download will take.
+
+### Download:
+
 ```{r}
 
-
+# Pick out site numbers for Q locations
 site_nums <- final_meta%>%
   filter(!is.na(Q))%>%
   select(numId)%>%
   pull()
-
+# set parameter
 parameter <- "Q"
 
+#Map over all Q sites and consolidate into single dataframe
 q_for_all <- map2(site_nums, parameter, data_downloader) %>%
   list_rbind()%>%
   mutate(datetime = lubridate::ymd_hms(dt))
 
+#check to make sure that all sites were included
 
+unique(q_for_all$locId)
 
+#pick out all metadata for Q sites
 
 meta_for_join <- final_meta%>%
   filter(!is.na(Q))%>%
@@ -242,10 +250,13 @@ meta_for_join <- final_meta%>%
   distinct(locId, .keep_all = TRUE)%>%
   select(locId, id, name, lat, long, agency, data_available)
 
+#join with larger dataframe 
 q_for_all_wmeta <- q_for_all%>%
   left_join(meta_for_join, by = "locId")%>%
   mutate(q_cfs = as.numeric(v)) 
 
+
+## Left out USGS Fort Collins site and loveland site wrq that has no Q
 ```
 
 ### Check the Q
@@ -253,39 +264,50 @@ q_for_all_wmeta <- q_for_all%>%
 I'd recommend going to <https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/100> to double check and make sure the data looks similar to the sites you pulled
 
 ```{r}
-
-#werks
+#plot all sites
 ggplot(data = q_for_all_wmeta ) +
   geom_point(aes(x = datetime, y = q_cfs)) +
   theme_bw() +
   facet_wrap(~locId)
+#plot indv site
+ggplot(data =filter( q_for_all_wmeta,locId == "3530") ) +
+  geom_point(aes(x = datetime, y = q_cfs)) +
+  theme_bw()
 
 ```
 
-## Exporting Q to arrow
+### Exporting Q to arrow
 
 ```{r}
 
 write_feather(q_for_all_wmeta, sink = "data/Q_modeling/larimer_co_2015-01-25_2023-01-30")
 
 ```
-# Precipitaion:
 
-## Download:
+## Precipitation:
+
+### Download:
+
 ```{r}
 
+# Pick out site numbers for Precip locations
 site_nums <- final_meta%>%
   filter(!is.na(Precip))%>%
   select(numId)%>%
   pull()
-
+# set parameter
 parameter <- "Precip"
 
+#Map over all Q sites and consolidate into single dataframe
 p_for_all <- map2(site_nums, parameter, data_downloader) %>%
   list_rbind()%>%
   mutate(datetime = lubridate::ymd_hms(dt))
 
+#check to make sure that all sites were included
 
+unique(p_for_all$locId)
+
+#pick out all metadata for Q sites
 
 meta_for_join <- final_meta%>%
   filter(!is.na(Precip))%>%
@@ -293,31 +315,37 @@ meta_for_join <- final_meta%>%
   distinct(locId, .keep_all = TRUE)%>%
   select(locId, id, name, lat, long, agency, data_available)
 
+#join with larger dataframe 
+
 p_for_all_wmeta <- p_for_all%>%
   left_join(meta_for_join, by = "locId")%>%
   mutate(p_mm = as.numeric(v)*25.4) 
 
 ```
 
+### Check Precip
 
-## Check Precip
+I'd recommend going to <https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/100> to double check and make sure the data looks similar to the sites you pulled.
+
 ```{r}
-
+#plot all sites
 ggplot(data = p_for_all_wmeta ) +
   geom_point(aes(x = datetime, y = p_mm)) +
   theme_bw() +
   facet_wrap(~locId)
 
+#plot indv site
+ggplot(data =filter( p_for_all_wmeta,locId == "3530") ) +
+  geom_point(aes(x = datetime, y = p_mm)) +
+  theme_bw()
+
 
 ```
 
-## Export Precip to arrow
+### Export Precip to arrow
 
 ```{r}
 
-write_feather(p_for_all_wmeta, sink = "data/Q_modeling/larimer_co_2015-01-25_2023-01-30")
+write_feather(p_for_all_wmeta, sink = "data/Q_modeling/larimer_co_precip_2015-01-25_2023-01-30")
 
 ```
-
-
-
