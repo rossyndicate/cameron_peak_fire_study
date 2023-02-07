@@ -118,7 +118,7 @@ larimer_p <- read_feather("data/Q_modeling/larimer_co_precip_2015-01-25_2023-01-
 
 #------ Pull in DWR Data ------#
 
-DWR <- read_feather("data/Q_modeling/DWR_active_stations_")
+DWR <- read_feather("data/Q_modeling/active_DWR_020723")
 
 #----- Kampf site locations ----#
 kampf_meta <- read_csv("data/Kampf_metadata.csv") %>%
@@ -143,8 +143,9 @@ write_csv(kampf_meta, "data/Q_modeling/kampf_stream_sites_simple.csv")
 brnr_ptrr_daily_q <- read_csv("data/Q_modeling/BRNR_PTRR_Q.csv") %>%
   mutate(
     inflow = replace_na(inflow, 0),
-    date = as.Date(date, format = "%m/%d/%y")
-  )
+    Date = as.Date(date, format = "%m/%d/%y"), 
+    site_name = case_when(site == "BRNR" ~ "Barnes Meadow Reservoir", 
+                          site == "PTRR" ~ "Peterson Lake"))
 
 plot_brnr_ptrr <- brnr_ptrr_daily_q %>%
   ggplot(aes(x = date)) +
@@ -183,3 +184,58 @@ mapview::mapview(all_q_sites, zcol = "data")+
 # site_name: reference name in all_q_sites
 # agency: Larimer. loveland...etc
 # Source: Larimer, USGS, DWR, Greeley
+
+#seperate dfs: DWR, larimer_q, brnr_ptrr_daily_q, usgs_Q
+
+prepped_larimer_q <- larimer_q%>%
+  mutate(Date = as.Date(datetime))%>%
+  group_by(Date, locId, name, agency)%>%
+  summarise(daily_q_cfs = mean(q_cfs))%>%
+  mutate(source = "Larimer County")%>%
+  rename(site_name = name, 
+         site_number = locId)%>%
+  ungroup()
+
+prepped_usgs <- clean_usgs_Q%>%
+   mutate(Date = as.Date(dateTime))%>%
+  group_by(Date, site_no, site_name, agency_cd)%>%
+  summarise(daily_q_cfs = mean(Q_cfs))%>%
+  mutate(source = "USGS")%>%
+  rename(agency = agency_cd, 
+         site_number = site_no)%>%
+  ungroup()
+
+prepped_dwr <- DWR%>%
+  mutate(Date = as.Date(datetime))%>%
+  group_by(Date, station_num, abbrev, data_source)%>%
+  summarise(daily_q_cfs = mean(value))%>%
+  mutate(source = "dwr")%>%
+  rename(agency = data_source, 
+         site_number = station_num, 
+         site_name = abbrev)%>%
+  ungroup()%>%
+  mutate(site_number = as.character(site_number))
+
+prepped_greeley <- brnr_ptrr_daily_q%>%
+  select(Date, daily_q_cfs = outflow, 
+         site_name)%>%
+  mutate(source = "Greeley", 
+         agency = "Greeley", 
+         site_number = NA)
+# combining all sources
+combined_q <- bind_rows(prepped_dwr, 
+                        prepped_larimer_q, 
+                        prepped_usgs, 
+                        prepped_greeley)
+
+#plotting all sites with Q
+ggplot(filter(combined_q, site_number != "3520"), aes(x = Date, y = daily_q_cfs, color = source))+
+  geom_line() +
+  theme_bw() +
+  scale_y_log10()+
+  facet_wrap(~site_name)
+
+ggsave("output/test_combined_Q.jpg", width = 30, height = 20)
+
+#export final
+write_feather(combined_q, sink = "data/Q_modeling/combined_Q_bigt_clp")
