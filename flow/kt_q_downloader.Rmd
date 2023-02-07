@@ -28,10 +28,10 @@ site_pull <- GET(url = "https://larimerco-ns5.trilynx-novastar.systems/novastar/
 site_content <- httr::content(site_pull)
 
 
-look_final <- tibble()
+final_meta <- tibble()
 no_station_data <- tibble()
 
-## Functionalize the loop below and return a df named look_final with all the station data
+## Functionalize the loop below and return a df named final_meta with all the station data
 ## and a df named no_station_data with all the stations that don't have any data
 
 
@@ -63,7 +63,7 @@ no_station_data <- tibble()
     pivot_wider(., names_from = dataType, values_from = rowid )%>%
     as_tibble()
   
-  look_final <- bind_rows(look_final, station_meta)
+  final_meta <- bind_rows(final_meta, station_meta)
   }
 
 ## Use  sf to transform at the locations of the sites in look final and no_station_data
@@ -71,7 +71,7 @@ no_station_data <- tibble()
 
 
 
-look_final <- look_final%>%
+final_meta <- final_meta%>%
   filter(!is.na(lat) & !is.na(long)& lat != "NULL")
 no_station_data <- no_station_data%>%
   filter(!is.na(lat)& !is.na(long)& lat != "NULL")
@@ -80,7 +80,7 @@ no_station_data <- no_station_data%>%
 
   ## create columns that classify sites by agency using the name column going off the list "Larimer", "Fort Collins", "Greeley" and "USGS"
   # Label other sites as "Other" in the name column
-  look_final <- look_final%>%
+  final_meta <- final_meta%>%
     mutate(agency = case_when(
       grepl("Larimer -", name) ~ "Larimer",
       grepl("Fort Collins -", name) ~ "Fort Collins",
@@ -93,7 +93,7 @@ no_station_data <- no_station_data%>%
     ))
 
     #remove the agency name from the name column
-    look_final <- look_final%>%
+    final_meta <- final_meta%>%
       mutate(name = gsub("Larimer - ", "", name))%>%
       mutate(name = gsub("Fort Collins - ", "", name))%>%
       mutate(name = gsub("Greeley - ", "", name))%>%
@@ -104,19 +104,21 @@ no_station_data <- no_station_data%>%
 
 
 ## Count the number of sites by agency
-look_final%>%
+final_meta%>%
   group_by(agency)%>%
   count()%>%
   arrange(desc(n))
 
 ## Classify sites by data_available, if the site has data in the dischargeRiver and Precip columns, then it is classified as "both". If it has only dischargeRiver data, then it is classified as "discharge". If it has only Precipitation data, then it is classified as "precipitation". If it has neither, then it is classified as "none"
-look_final <- look_final%>%
+final_meta <- final_meta%>%
   mutate(data_available = case_when(
     !is.na(DischargeRiver) & !is.na(Precip) ~ "Precip and Q",
     !is.na(DischargeRiver) & is.na(Precip) ~ "Q",
     is.na(DischargeRiver) & !is.na(Precip) ~ "Precip",
     is.na(DischargeRiver) & is.na(Precip) ~ "none"
-  ))
+  ))%>%
+  rename(Q = DischargeRiver, 
+         stage = WaterLevelRiver)
 
 
 
@@ -128,7 +130,7 @@ look_final <- look_final%>%
 
 ## use mapview to look at the sites in both dataframes
 
-look_final_sf <- look_final%>%
+final_meta_sf <- final_meta%>%
   mutate(lat = as.numeric(lat),
          long = as.numeric(long))%>%
   st_as_sf(coords = c("long", "lat"), crs = 4326)
@@ -138,7 +140,7 @@ mutate(lat = as.numeric(lat),
          long = as.numeric(long))%>%
   st_as_sf(coords = c("long", "lat"), crs = 4326)
 
-  station_map <- mapview::mapview(look_final_sf, zcol = "data_available", alpha.regions = 0.5, map.types = "Esri.WorldTopoMap")
+  station_map <- mapview::mapview(final_meta_sf, zcol = "data_available", alpha.regions = 0.5, map.types = "Esri.WorldTopoMap")
 
 
   station_map
@@ -152,9 +154,9 @@ mutate(lat = as.numeric(lat),
 of all sites that have Q or precipitation
 
 ```{r}
-## create a dataframe and csv that has the lat, long, site name, agency and data available for each site from look_final
+## create a dataframe and csv that has the lat, long, site name, agency and data available for each site from final_meta
 
-look_final%>%
+final_meta%>%
   filter(data_available != "none")%>%
   select(name,numId, lat, long, agency, data_available)%>%
 write_csv("data/Q_modeling/station_data.csv")
@@ -162,76 +164,88 @@ write_csv("data/Q_modeling/station_data.csv")
 
 # Downloading data
 
-## Q:
+Parameters available are:
+- Q
+- Precip
+- Stage
 
-```{r}
-q_sites <- final_meta %>%
-  filter(grepl("Discharge", dataType)) %>%
-  distinct(numId) %>%
-  unlist() %>%
-  unname()
+```{r download function}
 
-q_downloader <- function(q_sites){
+data_downloader <- function(site_nums, parameter){
   
-  # sub-test it:
-  #q_sites <- "11518"
-  
+
   url <- paste0("https://larimerco-ns5.trilynx-novastar.systems/novastar/data/api/v1/",
-                "stationSummaries?forOperatorStationDashboard=true&stationNumId=", q_sites,
-                "&periodStart=2015-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
+                "stationSummaries?forOperatorStationDashboard=true&stationNumId=", site_nums,
+                "&periodStart=2022-01-25T13:59:00-07:00&periodEnd=", Sys.Date(),
                 "T13:59:00-07:00")
   
   request <- httr::GET(url = url)
   
   total_list <- httr::content(request)
   
-  discharge_rows <- as_tibble(do.call(rbind, 
-                                      total_list[["stationSummaries"]][[1]][["ts"]])) %>%
-    rowid_to_column() %>%
-    filter(grepl("Discharge",dataType)) %>%
-    pull(rowid)
+  parameter_row <- final_meta%>%
+    filter(numId == site_nums)%>%
+    pull(parameter)%>%
+    as.numeric()
   
-  q_unlister <- function(discharge_rows){
+
+  
+  unlister <- function(parameter_row){
+
     
-    q_meta <- total_list[["stationSummaries"]][[1]][["ts"]][[as.numeric(discharge_rows)]] %>%
-      rbind() %>%
-      as.data.frame() %>%
-      dplyr::select(-c(data, properties))
-    
-    unlisted_q <- total_list[["stationSummaries"]][[1]][["ts"]][[as.numeric(discharge_rows)]][["data"]] %>%
+    unlisted <- total_list[["stationSummaries"]][[1]][["ts"]][[parameter_row]][["data"]] %>%
       bind_rows() %>%
-      mutate(locId = as.character(q_meta$locId)) %>%
-      #left_join(q_meta, by = "locId") %>%
+      mutate(locId = site_nums) %>%
       as.data.frame()
-  
-    return(unlisted_q)
+    
+    return(unlisted)
     
 }
   
-  flow <- discharge_rows %>%
-    map(~ q_unlister(discharge_rows = .)) %>%
-    dplyr::bind_rows()
+  data <- parameter_row %>%
+    map(~ unlister(parameter_row= .)) %>%
+    dplyr::bind_rows()%>%
+    mutate(param = parameter)
   
-  return(flow)
+  return(data)
   
 }
 
-q_for_all <- q_sites %>%
-  map(~ q_downloader(q_sites = .)) %>%
-  list_rbind()
+   
+  
+
+```
+
+
+## Q:
+
+```{r}
+
+
+site_nums <- final_meta%>%
+  filter(!is.na(Q))%>%
+  select(numId)%>%
+  pull()
+
+parameter <- "Q"
+
+q_for_all <- map2(site_nums, parameter, data_downloader) %>%
+  list_rbind()%>%
+  mutate(datetime = lubridate::ymd_hms(dt))
+
 
 
 
 meta_for_join <- final_meta%>%
-  filter(dataType == "DischargeRiver")%>%
+  filter(!is.na(Q))%>%
   mutate(locId = as.character(numId))%>%
-  distinct(locId, .keep_all = TRUE)
+  distinct(locId, .keep_all = TRUE)%>%
+  select(locId, id, name, lat, long, agency, data_available)
 
 q_for_all_wmeta <- q_for_all%>%
   left_join(meta_for_join, by = "locId")%>%
-  mutate(datetime = lubridate::ymd_hms(dt),
-         q_cfs = as.numeric(v)) 
-  
+  mutate(q_cfs = as.numeric(v)) 
+
 ```
 
 ### Check the Q
@@ -239,18 +253,12 @@ q_for_all_wmeta <- q_for_all%>%
 I'd recommend going to <https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/100> to double check and make sure the data looks similar to the sites you pulled
 
 ```{r}
-test_df_q <- q_for_all_wmeta %>%
-  filter( locId == "6770")%>%
-  select(datetime, q_cfs, locId) %>%
-  as_tibble()
-
-
-
 
 #werks
-ggplot(data = test_df_q) +
-  geom_line(aes(x = unlist(datetime), y = q_cfs)) +
-  theme_bw() 
+ggplot(data = q_for_all_wmeta ) +
+  geom_point(aes(x = datetime, y = q_cfs)) +
+  theme_bw() +
+  facet_wrap(~locId)
 
 ```
 
@@ -261,3 +269,55 @@ ggplot(data = test_df_q) +
 write_feather(q_for_all_wmeta, sink = "data/Q_modeling/larimer_co_2015-01-25_2023-01-30")
 
 ```
+# Precipitaion:
+
+## Download:
+```{r}
+
+site_nums <- final_meta%>%
+  filter(!is.na(Precip))%>%
+  select(numId)%>%
+  pull()
+
+parameter <- "Precip"
+
+p_for_all <- map2(site_nums, parameter, data_downloader) %>%
+  list_rbind()%>%
+  mutate(datetime = lubridate::ymd_hms(dt))
+
+
+
+meta_for_join <- final_meta%>%
+  filter(!is.na(Precip))%>%
+  mutate(locId = as.character(numId))%>%
+  distinct(locId, .keep_all = TRUE)%>%
+  select(locId, id, name, lat, long, agency, data_available)
+
+p_for_all_wmeta <- p_for_all%>%
+  left_join(meta_for_join, by = "locId")%>%
+  mutate(p_mm = as.numeric(v)*25.4) 
+
+```
+
+
+## Check Precip
+```{r}
+
+ggplot(data = p_for_all_wmeta ) +
+  geom_point(aes(x = datetime, y = p_mm)) +
+  theme_bw() +
+  facet_wrap(~locId)
+
+
+```
+
+## Export Precip to arrow
+
+```{r}
+
+write_feather(p_for_all_wmeta, sink = "data/Q_modeling/larimer_co_2015-01-25_2023-01-30")
+
+```
+
+
+
