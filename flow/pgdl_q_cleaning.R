@@ -26,12 +26,13 @@ source("package_loader.R")
 
 
 # Set the HUC code and parameter code
-huc_code <- "10190007"
+huc_code <- c("10190007", "10190006")
+watershed <- c("Cache La Poudre", "Big Thompson")
 parameter_code <- "00060"
 
 # Use the whatNWISdata function to get site information for all sites in the HUC with the specified parameter code
-usgs_clp_site_info <-
-  whatNWISdata(parameterCd = parameter_code, huc = huc_code) %>%
+clean_usgs_site_info <- function(huc_code, watershed){
+ usgs_meta <- whatNWISdata(parameterCd = parameter_code, huc = huc_code) %>%
   distinct(site_no, .keep_all = TRUE) %>%
   filter(end_date >= "2020-01-01") %>%
   select(
@@ -41,10 +42,15 @@ usgs_clp_site_info <-
     long = dec_long_va,
     start_date = begin_date,
     end_date
-  )
+  )%>%
+   mutate(watershed = watershed)
+  return(usgs_meta)
+}
 
-clp_usgs_sites <- select(usgs_clp_site_info, site_no)
-site_names <- select(usgs_clp_site_info, c(site_no, site_name))
+usgs_site_meta <- map2(huc_code, watershed, clean_usgs_site_info)%>%
+  list_rbind()
+usgs_site_nums <- usgs_site_meta%>%
+  select(site_no)
 
 # save for later use
 # write_csv(usgs_clp_site_info, "data/Q_modeling/usgs_sites_simple.csv")
@@ -63,20 +69,20 @@ read_q <- function(sites) {
 
 # Pull in all Q for sites selected above
 # May take a sec to load
-clp_usgs_Q <- map(clp_usgs_sites, read_q) %>%
+usgs_Q <- map(usgs_site_nums, read_q) %>%
   list_rbind()
 # make sure all sites are there
-unique(clp_usgs_Q$site_no)
-
-clean_clp_usgs_Q <- clp_usgs_Q %>%
+unique(usgs_Q$site_no)
+usgs_site_nums
+clean_usgs_Q <- usgs_Q %>%
   rename(
     Q_cfs = X_00060_00000,
     Q_flag = X_00060_00000_cd,
     tz = tz_cd
   ) %>%
-  left_join(site_names, by = "site_no")
+  left_join(usgs_site_meta, by = "site_no")
 
-plot_all_sites <- clean_clp_usgs_Q %>%
+plot_all_sites <- clean_usgs_Q %>%
   ggplot(aes(
     x = dateTime,
     y = Q_cfs,
@@ -91,28 +97,28 @@ plot_all_sites <- clean_clp_usgs_Q %>%
 
 # ggsave("output/USGS_sites.jpg", width = 20, height = 12)
 
-clp_usgs_Q_final <- clean_clp_usgs_Q %>%
+usgs_Q_final <- clean_usgs_Q %>%
   select(
     agency = agency_cd,
     site_no,
     DT = dateTime,
     Q_cfs, Q_flag, tz,
-    site_name
+    site_name, watershed
   )
 
-write_csv(clp_usgs_Q_final, file = "data/Q_modeling/usgs_clp_Q.csv")
+write_csv(usgs_Q_final, file = "data/Q_modeling/usgs_Q.csv")
 
 
 #------- Pull in Larimer County Data -----#
 
 # URL of the site to select specific stations
-station_url <- "https://larimerco-ns5.trilynx-novastar.systems/novastar/operator/#/stationDashboard/"
-
+larimer_q <- read_feather("data/Q_modeling/larimer_co_2015-01-25_2023-01-30")
+larimer_p <- read_feather("data/Q_modeling/larimer_co_precip_2015-01-25_2023-01-30")
 
 
 #------ Pull in DWR Data ------#
-# https://dwr.state.co.us/tools/stations
 
+DWR <- read_feather("data/Q_modeling/DWR_active_stations_")
 
 #----- Kampf site locations ----#
 kampf_meta <- read_csv("data/Kampf_metadata.csv") %>%
@@ -164,3 +170,16 @@ clp_flowlines <- st_read("data/cpf_sbs/clp_flowlines.shp")
 
 mapview::mapview(all_q_sites, zcol = "data")+
   mapview::mapview(clp_flowlines)
+
+
+## Joining all datasets ###
+
+# Q dataframe
+
+#column names: 
+# Date (or datetime): all posixct
+# q_cfs: avg value for day
+# site_number: reference site number in all_q_sites
+# site_name: reference name in all_q_sites
+# agency: Larimer. loveland...etc
+# Source: Larimer, USGS, DWR, Greeley
