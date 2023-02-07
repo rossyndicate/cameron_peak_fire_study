@@ -75,23 +75,31 @@ DWR_map
 
 ```{r}
 
-#Loop over DWR sites to grab all available Q
-daily_station_Q  <- tibble()
 
-for(i in 1:length(all_stations$station_num)){
-  
-  single_site <- cdssr::get_sw_ts(station_number = all_stations$station_num[i])
- daily_station_Q <- rbind(single_site, daily_station_Q  )
-  
+
+#Grab active site numbers
+station_nums<- active_dwr%>%
+  st_drop_geometry()%>%
+  select(station_num)%>%
+  pull()
+#function to 
+grab_station_Q <- function(station_num){
+  single_site <- cdssr::get_sw_ts(station_number = station_num)
+  return(single_site)
 }
+
+active_dwr_Q <- map(station_nums, grab_station_Q)%>%
+  list_rbind()
+
+
 #check units and type
-unique(daily_station_Q$meas_unit)
-unique(daily_station_Q$meas_type)
+unique(active_dwr_Q$meas_unit)
+unique(active_dwr_Q$meas_type)
 
-unique(daily_station_Q$flag_a)
+unique(active_dwr_Q$flag_a)
 
 
-cleaned_Q <- daily_station_Q%>%
+cleaned_Q <- active_dwr_Q%>%
   filter(value >= 0)
 ```
 
@@ -110,5 +118,13 @@ DWR_station_plot <- cleaned_Q %>%
   # scale_y_log10()+
    facet_wrap(~abbrev)
 plot(DWR_station_plot)
+
+```
+
+Exporting active DWR sites
+
+```{r}
+
+write_feather(active_dwr_Q, sink = "data/Q_modeling/active_DWR_020723")
 
 ```
