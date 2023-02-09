@@ -1,0 +1,142 @@
+---
+title: "Correlation and Linear Modeling"
+author: "Sam Struthers"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("package_loader.R")
+source("field_chemistry/00_colors_and_groups.R")
+```
+
+# Linear Modeling of Nutrient and Algal dyanmics
+
+## Goals of this document:
+
+-   Create function that makes a linear model between all water quality variables
+
+-   Run function on subsets
+
+    -   Campaigns (Res, mainstem, different res systems)
+
+    -   Sites
+
+    -   Seasons
+
+```{r import}
+long_df <- read_feather("data/res_chem_cleaned/res_all_chem")
+fcgov_mainstem_df <- read_feather("data/res_chem_cleaned/fcgov_mainstem")
+
+```
+
+## Linear Model Function
+
+
+```{r}
+
+
+
+linear_model_two_parameters<- function(parameter1, parameter2){
+  
+  subset_df <- long_df%>%
+    filter(Parameter %in% c(parameter1, parameter2))%>%
+    pivot_wider( names_from = Parameter, values_from = Measurement)%>%
+    dplyr::select(x= parameter1, y = parameter2)%>%
+    na.omit()
+  
+    chem_lm <- lm(x ~ y, data = subset_df)
+  
+  # summary of lm created
+  # this is where coefficients will be pulled from
+  
+  # intercept == b
+  # logH == a
+  chem_summary <- summary(chem_lm)
+  
+  # pulling coefficients in to results data frame
+    lm_results <- tibble(
+      x = parameter1, 
+      y = parameter2, 
+      intercept = chem_summary$coefficients[1,1], 
+      slope = chem_summary$coefficients[2,1], 
+      r2 =chem_summary$r.squared
+    )
+      
+
+  return(lm_results)
+}
+plot(chem_lm)
+
+
+parameter1 <- unique(long_df$Parameter[1])
+parameter2 <- unique(long_df$Parameter)
+
+all_sites_all_param_lm <- map2(parameter1, parameter2, linear_model_two_parameters)%>%
+  list_rbind()%>%
+  dplyr::select(chla = x, param2 = y , int = intercept, m = slope, r2)
+
+view(all_sites_all_param_lm)
+```
+
+
+## Plotting Linear models
+```{r}
+
+ggplot(data = all_sites_all_param_lm, aes( x = m, y= r2))+
+  geom_point()+
+  theme_bw(base_size = 15)
+
+
+```
+
+```{r}
+
+site_linear_model_two_parameters<- function(parameter2){
+
+  parameter1 <- unique(long_df$Parameter[1])
+site_name <- "CBRR"
+
+  subset_df <- long_df%>%
+    filter(site_code %in% site_name)%>%
+    filter(Parameter %in% c(parameter1, parameter2))%>%
+    pivot_wider( names_from = Parameter, values_from = Measurement)%>%
+    dplyr::select(x= parameter1, y = parameter2)%>%
+    na.omit()
+  
+    chem_lm <- lm(x ~ y, data = subset_df)
+  
+  # summary of lm created
+  # this is where coefficients will be pulled from
+  
+  # intercept == b
+  # logH == a
+  chem_summary <- summary(chem_lm)
+
+  if(is.na(chem_summary$coefficients[2,1])){
+    next
+  }
+  
+
+  # pulling coefficients in to results data frame
+    lm_results <- tibble(
+      x = parameter1, 
+      y = parameter2, 
+      intercept = chem_summary$coefficients[1,1], 
+      slope = chem_summary$coefficients[2,1], 
+      r2 =chem_summary$r.squared
+    )
+      
+
+  return(lm_results)
+}
+parameter2 <- unique(long_df$Parameter)
+parameter2 <- "PO4"
+tester <- site_linear_model_two_parameters("PO4")
+
+indv_sites_test_param_lm <- map(parameter2, site_linear_model_two_parameters)%>%
+  dplyr::select(chla = x, param2 = y , int = intercept, m = slope, r2)
+
+```
+
