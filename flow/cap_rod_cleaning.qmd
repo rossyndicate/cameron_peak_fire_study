@@ -22,6 +22,8 @@ library(plotly)
 
 *'driftR\` package is not up to date with Rstudio so I am sourcing the functions from a folder called driftR_functions in the src folder:*
 
+Link to driftR package: https://shaughnessyar.github.io/driftR/
+
 ```{r driftR_source}
 source("flow/driftR_functions/dr_correctOne.R")
 source("flow/driftR_functions/dr_correctTwo.R")
@@ -965,7 +967,7 @@ r2_values <- dplyr::select(manual_H_Q_rc, c(site_code, r2))%>%
 head(r2_values)
 ```
 
-###  Kampf version
+### Kampf version
 
 ```{r kampf_rating_curve_model}
 

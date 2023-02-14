@@ -14,22 +14,8 @@ This will be the primary document for cleaning data
 #### Set Up
 
 ```{r}
-
-
-library(tidyverse)
-library(ggplot2)
-library(ggpubr)
-library(ggthemes)
-library(scales)
-library(corrplot)
-library(lubridate)
-library(sf)
-#library(mapview)       Takes time to load, not using it yet
-library(plotly)
-library(geomtextpath)
-library(dplyr)
-library(plyr)
-
+source("package_loader.R")
+source("field_chemistry/00_colors_and_groups.R")
 
 ```
 
@@ -49,41 +35,6 @@ This looks like:
 
     -   Focus on NO3, PO4,
 
-## Importing data
-
--   buffer_sbs:Indices based on burn severity directly around the reservoir
-
--   Watershed_sbs: within each reservoirs watershed.
-
--   Sites: Locations of each site, includes grouping and type of body of water
-
--   Res_Chem: Chemistry data from Tim, includes Date, site, chem
-
-```{r}
-
-buffer_sbs <- read_csv('data/sbs_buffer.csv') %>%
-  mutate(Buffer_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))
-
-watershed_sbs <- read_csv('data/sbs_watershed.csv') %>%
-  mutate(Watershed_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))
-
-Sites <- read.csv('data/CPF_Sites.csv')
-
-dist_from_pbd <- read.csv('data/Distance_from_PBD.csv')
-
-cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-## This is where i will read in data
-mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
-mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
-
-SF_Res <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO", "BEAV", "SFM")
-
-mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
-
-
-all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
-
-```
 
 ## Cleaning data
 
@@ -114,8 +65,8 @@ reservoir_chemistry <- read_csv('data/ReservoirChemistry_010523.csv')%>%
   left_join(select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code")%>%
   left_join(select(Sites,c(site_code,Lat,Long)),by="site_code") %>%
   left_join(select(dist_from_pbd,c(site_code,distance_upstream_km)),by="site_code") %>%
-  mutate(season=ifelse(Date <= "2022-06-09", "SPRING",
-                ifelse(Date <= "2022-09-24", "SUMMER", "FALL"))) %>%
+  # mutate(season=ifelse(Date <= "2022-06-09", "SPRING",
+  #               ifelse(Date <= "2022-09-24", "SUMMER", "FALL"))) %>%
   mutate(status = ifelse(site_code %in% c('LNGR','LNGO','JOEI'),"Unburned",
                   ifelse(site_code %in% c('COMI','COMR','COMO','HORI','HORR','HORO','PTRR','PTRO','CBRR','CHD','BRNR','BMD'), "Burned",                                                                                                            "Partially Burned"))) %>%
   mutate(Location = ifelse(site_code %in% 
@@ -204,7 +155,7 @@ reservoir_chemistry <- read_csv('data/ReservoirChemistry_010523.csv')%>%
 
 ```
 
-##Data Checks
+## Data Checks
 
 ```{r}
 
@@ -214,7 +165,7 @@ summary(reservoir_chemistry)
 # number of samples per site per year
 res_samples_year_site <- reservoir_chemistry%>%
   group_by(Year, site_code)%>%
-  summarise( n = n())
+  dplyr::summarise( n = n())
 
 summary(res_samples_year_site)
 
@@ -239,14 +190,48 @@ res_chem_2022 <- rmrs_chemistry%>%
 unique_chla <- rmrs_chemistry%>%
   drop_na()%>%
   group_by(yr, campaign)%>%
-  summarise( n = n())
+  dplyr::summarise( n = n())
 
 
 
 
 ```
 
-## Exporting data to csvs
+### Importing ICP chem
+
+```{r}
+
+res_icp <- read_csv("data/ReservoirStudy_ICPData.csv")%>%
+  mutate(Date = as.Date(Date, format = "%d-%b-%y"), 
+         Al = as.numeric(gsub("x", "", Al_ppb)), 
+         P = as.numeric(gsub("x", "", P_ppm)), 
+         Mn = as.numeric(gsub("x", "", Mn_ppb)),
+         Fe = as.numeric(gsub("x", "", Fe_ppb)))%>%
+  select(FCW_Number = EraSamp, 
+         Al, P, Mn, Fe)
+
+
+res_all <- reservoir_chemistry%>%
+  left_join(res_icp, by = "FCW_Number")%>%
+    # select(-c(IDNo, 
+    #         SiteDescr,
+    #         watershed, 
+    #         Lat, Long,
+    #         order, Xdistance, SampleType, Location, Distance, Site, SiteLabel))%>%
+  pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3, Al, P, Mn, Fe), names_to = "Parameter",values_to = "Measurement" )
+
+
+write_feather(res_all, sink = "data/res_chem_cleaned/res_all_chem")
+
+  
+# ggplot(data = filter(res_all, Year >=2021& Parameter == ""), aes(x = Date, y = Measurement, group = site_code, color = site_code))+
+#   geom_point()+
+#   theme_bw(base_size = 15)+
+#   facet_wrap(~Parameter, scales = "free_y")
+```
+
+## Exporting data to csv
+
 ```{r writing}
 write.csv(reservoir_chemistry, 
           "data/prepped_reservoir_chemistry.csv")
@@ -255,17 +240,16 @@ write.csv(filter(reservoir_chemistry, Location == "Mainstem"),
           "data/prepped_mainstem_chemistry.csv")
 
 reservoir_chemistry_concise <- reservoir_chemistry%>%
-  select(Site, site_code, Date,Lat,Long,watershed,Watershed_Level, status,Location, Turbidity,TSS,ChlA,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4)
+  select(Site, site_code, Date,Lat,Long,watershed,Watershed_Level, status, Turbidity,TSS,ChlA,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4, DOC, DTN)
 
 
-write.csv(reservoir_chemistry_concise, 
+write_csv(reservoir_chemistry_concise, 
           "data/CPF_reservoir_chemistry_up_to_110122.csv")
 #Res_Chem_longer <- reservoir_chemistry%>%
  # pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3), names_to = "Variable", values_to = "Measurement")
 
 
 ```
-
 
 ## Playing with FCGOV DATA
 
@@ -275,7 +259,7 @@ write.csv(reservoir_chemistry_concise,
 fcgov_study <- c("CHD", "BMD","JWC", "PJW", "PBR", "SFM", "PSF", "PNF", "PBD")
 
 #importing 
-fcgov_mainstem <- read.csv("data/UCLP_CWQMP_database_CSU.csv", na.strings = '*')%>%
+fcgov_mainstem <- read.csv("data/fcgov_mainstem_chem.csv", na.strings = '*')%>%
   mutate(#Date = as_date(Date, format = "%m/%d/%Y"),
          Date = make_date(Year, Month, Day),
          site_code = ifelse(ShortDesc %in% c("BMR", "BMD"), "BMD", 
@@ -290,7 +274,9 @@ fcgov_mainstem <- read.csv("data/UCLP_CWQMP_database_CSU.csv", na.strings = '*')
   mutate(status = ifelse(site_code %in% fcgov_study, "Burned", "Unburned"),
          dayofyear = yday(Date), 
          collector = "City of Fort Collins")%>%
-  select(site_code,Year, Date ,Turbidity, pH, SC, Na, K, Mg, Ca, Cl, NO3, PO4, SO4, DO, Temp,collector, status )
+  dplyr::select(site_code,Year, Date ,Turbidity, pH, SC, Na, K, Mg, Ca, Cl, NO3, PO4, SO4, DO, Temp,collector, status )
+
+write_feather(fcgov_mainstem, sink = "data/res_chem_cleaned/fcgov_mainstem")
 
 
 #combining with RMRS data

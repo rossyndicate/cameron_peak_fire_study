@@ -13,6 +13,7 @@ package_load <- function(package_names){
 
 #list of packages
 pack_req <- c("tidyverse",
+              "lubridate",
               "ggplot2", 
               "sf", 
               "terra", 
@@ -23,6 +24,21 @@ pack_req <- c("tidyverse",
               "dataRetrieval", 
               "httr", 
               "tigris",
-              "raster")
+              "raster", 
+              "janitor",
+              "CDSS", 
+              "devtools", 
+              "plotly", 
+              "arrow",
+              "jsonlite")
 package_load(pack_req)
 
+devtools::install_github("anguswg-ucsb/cdssr")
+# Load package
+library(cdssr)
+
+
+remove(pack_req, package_load)
+
+
+       
