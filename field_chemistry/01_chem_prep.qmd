@@ -47,32 +47,22 @@ This looks like:
 ```{r}
 
 
-reservoir_chemistry <- read_csv('data/ReservoirChemistry_010523.csv')%>%
+reservoir_chemistry <- read_csv('data/field_chemistry/raw/ReservoirChemistry_010523.csv')%>%
   mutate(Date=as.Date(Date,format="%d-%b-%y"))%>%
   filter(SampleType == "NORM") %>%
   mutate (FCW_Number = as.numeric(gsub('FCW ', '', IDNo)), 
           Year =  year(Date), 
           site_code = SiteLabel)%>%
-  mutate(watershed=ifelse(site_code %in% c('LNGR','LNGO'),"Long Draw Reservoir",
-                   ifelse(site_code %in% c('PTRO','PTRR'),'Peterson Reservoir',
-                   ifelse(site_code %in% c('SLEP','JWC','PNF','PBD', 'PJW','PBR', 'SFM','PSF' ),'CLP Mainstem Canyon',
-                   ifelse(site_code %in% c('ELC','ARCH', 'LEGC','TIMB' ),'CLP Mainstem Fort Collins',
-                   ifelse(site_code %in% c('JOEI','JOER'),"Joe Wright Reservoir",
-                   ifelse(site_code %in% c('CBRI', 'CBRR','CHD'), "Chambers Reservoir",
-                   ifelse(site_code %in% c('BRNR','BMD'),"Barnes Meadow Reservoir",
-                   ifelse(site_code %in% c('COMR','COMO','COMI'),"Comanche Reservoir","Hourglass Reservoir"))))))))) %>%
+  select(-c(SiteLabel, IDNo, SiteDescr, SampleType))%>%
+  left_join(select(Sites,c(site_code,Lat,Long, location, Campaign, watershed, status)),by="site_code") %>%
    left_join(select(buffer_sbs,c(watershed,Buffer_Level)),by="watershed") %>%
   left_join(select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code")%>%
-  left_join(select(Sites,c(site_code,Lat,Long)),by="site_code") %>%
   left_join(select(dist_from_pbd,c(site_code,distance_upstream_km)),by="site_code") %>%
-  # mutate(season=ifelse(Date <= "2022-06-09", "SPRING",
-  #               ifelse(Date <= "2022-09-24", "SUMMER", "FALL"))) %>%
-  mutate(status = ifelse(site_code %in% c('LNGR','LNGO','JOEI'),"Unburned",
-                  ifelse(site_code %in% c('COMI','COMR','COMO','HORI','HORR','HORO','PTRR','PTRO','CBRR','CHD','BRNR','BMD'), "Burned",                                                                                                            "Partially Burned"))) %>%
-  mutate(Location = ifelse(site_code %in% 
-                             c("LNGR","PTRR","JOER","CBRR","BRNR","COMR","HORR"),"Reservoir",
-                      ifelse(site_code %in% c("SLEP","JWC","PNF","PBD", "PJW","PBR", "SFM","PSF" ), "Mainstem",
-                      ifelse(site_code %in% c("LNGO","PTRO","CHD","BMD","HORO","COMO"),"Outflow","Inflow"))))%>%
+   mutate(season=case_when(between(Date, as.Date("2022-01-01"), as.Date("2022-06-09")) ~ "SPRING", 
+                           between(Date, as.Date("2021-01-01"), as.Date("2021-06-09")) ~ "SPRING",
+                           between(Date, as.Date("2022-06-10"), as.Date("2022-09-24")) ~ "SUMMER", 
+                           between(Date, as.Date("2021-06-10"), as.Date("2021-09-24")) ~ "SUMMER",
+                          .default =  "FALL")) %>%
   mutate(Distance = case_when(site_code == 'JOEI' ~ '1 - JOEI',
                               site_code == 'JOER' ~ '2 - JOER',
                               site_code == 'CBRI' ~ '3 - CBRI',
@@ -152,6 +142,9 @@ reservoir_chemistry <- read_csv('data/ReservoirChemistry_010523.csv')%>%
                         site_code == "PBD"~ "26",))%>%
   dplyr::arrange(as.factor(status))
 
+# write a feather file named reservoir_chem_2021_2022.feather
+write_feather(reservoir_chemistry, "data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")
+
 
 ```
 
@@ -172,27 +165,39 @@ summary(res_samples_year_site)
 
 #Determning number of Samples....
 
-rmrs_chemistry <- read.csv("data/CamPkChem.csv")%>%
+rmrs_chemistry <- read.csv("data/field_chemistry/raw/CamPkChem.csv")%>%
   select(Date, SiteLabel ,ChlA)%>%
   mutate(Date = as.Date.character(Date,format = "%d-%b-%y"),
-         yr = year(Date),
-    campaign = ifelse(SiteLabel %in% all_res_system, "Reservoir", 
-                    ifelse(SiteLabel %in% ISCO, "ISCO",
-                    ifelse(SiteLabel %in% Mainstem_sites, "Mainstem", "Tributary")) ))
+         year = year(Date),
+    campaign = case_when(SiteLabel %in% all_res_system ~ "Reservoir", 
+                         grepl(pattern = "ISCO", SiteLabel) ~"ISCO",
+                         SiteLabel %in% mainstem_sites ~"Mainstem", 
+                         SiteLabel %in% genomic_sites ~ "In-Town Genomic", 
+                         SiteLabel == "BEAV" ~ "Reservoir", 
+                         .default = "Tributary"))
 
+  
 #samples by year and campaign
 
-res_chem_2022 <- rmrs_chemistry%>%
-  group_by(yr, campaign)%>%
-  summarise( n = n())
+campaign_by_year <- rmrs_chemistry%>%
+  group_by(year, campaign)%>%
+  summarise( sample_count = n())%>%
+  ungroup()%>%
+  ##pivot the data so that each campaign is a column
+  pivot_wider(names_from = "campaign", values_from = "sample_count")%>%
+  # replace all NAs with 0
+  mutate_at(vars(-year), ~replace(., is.na(.), 0))
+
+
+print(campaign_by_year, n = length(campaign_by_year$year)) 
 
 # number of unique chla measurements
 unique_chla <- rmrs_chemistry%>%
-  drop_na()%>%
-  group_by(yr, campaign)%>%
-  dplyr::summarise( n = n())
-
-
+  filter(!is.na(ChlA))%>%
+  group_by(year, campaign)%>%
+  dplyr::summarise( chla_samples = n())%>%
+  ungroup()
+print(unique_chla)
 
 
 ```
@@ -201,7 +206,7 @@ unique_chla <- rmrs_chemistry%>%
 
 ```{r}
 
-res_icp <- read_csv("data/ReservoirStudy_ICPData.csv")%>%
+res_icp <- read_csv("data/field_chemistry/raw/ReservoirStudy_ICPData.csv")%>%
   mutate(Date = as.Date(Date, format = "%d-%b-%y"), 
          Al = as.numeric(gsub("x", "", Al_ppb)), 
          P = as.numeric(gsub("x", "", P_ppm)), 
@@ -211,7 +216,7 @@ res_icp <- read_csv("data/ReservoirStudy_ICPData.csv")%>%
          Al, P, Mn, Fe)
 
 
-res_all <- reservoir_chemistry%>%
+res_longer <- reservoir_chemistry%>%
   left_join(res_icp, by = "FCW_Number")%>%
     # select(-c(IDNo, 
     #         SiteDescr,
@@ -221,33 +226,25 @@ res_all <- reservoir_chemistry%>%
   pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3, Al, P, Mn, Fe), names_to = "Parameter",values_to = "Measurement" )
 
 
-write_feather(res_all, sink = "data/res_chem_cleaned/res_all_chem")
+write_feather(res_longer, sink = "data/field_chemistry/cleaned/reservoir_chemistry_longer.feather")
 
   
-# ggplot(data = filter(res_all, Year >=2021& Parameter == ""), aes(x = Date, y = Measurement, group = site_code, color = site_code))+
-#   geom_point()+
-#   theme_bw(base_size = 15)+
-#   facet_wrap(~Parameter, scales = "free_y")
 ```
 
 ## Exporting data to csv
 
 ```{r writing}
 write.csv(reservoir_chemistry, 
-          "data/prepped_reservoir_chemistry.csv")
+          "data/field_chemistry/cleaned/prepped_reservoir_chemistry.csv")
 
-write.csv(filter(reservoir_chemistry, Location == "Mainstem"),
-          "data/prepped_mainstem_chemistry.csv")
+write.csv(filter(reservoir_chemistry, location == "Mainstem"),
+          "data/field_chemistry/cleaned/prepped_mainstem_chemistry.csv")
 
 reservoir_chemistry_concise <- reservoir_chemistry%>%
   select(Site, site_code, Date,Lat,Long,watershed,Watershed_Level, status, Turbidity,TSS,ChlA,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4, DOC, DTN)
 
-
 write_csv(reservoir_chemistry_concise, 
-          "data/CPF_reservoir_chemistry_up_to_110122.csv")
-#Res_Chem_longer <- reservoir_chemistry%>%
- # pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3), names_to = "Variable", values_to = "Measurement")
-
+          "data/field_chemistry/cleaned/CPF_reservoir_chemistry_up_to_110122.csv")
 
 ```
 
@@ -255,11 +252,10 @@ write_csv(reservoir_chemistry_concise,
 
 ```{r}
 
-#Fcgov sites in our study
-fcgov_study <- c("CHD", "BMD","JWC", "PJW", "PBR", "SFM", "PSF", "PNF", "PBD")
+
 
 #importing 
-fcgov_mainstem <- read.csv("data/fcgov_mainstem_chem.csv", na.strings = '*')%>%
+fcgov_mainstem <- read.csv("data/field_chemistry/raw/fcgov_mainstem_chem.csv", na.strings = '*')%>%
   mutate(#Date = as_date(Date, format = "%m/%d/%Y"),
          Date = make_date(Year, Month, Day),
          site_code = ifelse(ShortDesc %in% c("BMR", "BMD"), "BMD", 
