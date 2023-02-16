@@ -5,15 +5,16 @@
 ## Importing data
 
 #buffer_sbs:Indices based on burn severity directly around the reservoir
-buffer_sbs <- read_csv('data/sbs_buffer.csv') %>%
+buffer_sbs <- read_csv('data/field_chemistry/metadata/sbs_buffer.csv') %>%
   mutate(Buffer_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))
 # watershed_sbs: within each reservoirs watershed.
-watershed_sbs <- read_csv('data/sbs_watershed.csv') %>%
+watershed_sbs <- read_csv('data/field_chemistry/metadata/sbs_watershed.csv') %>%
   mutate(Watershed_Level=((Unburned*0)+(V_Low*0.1)+(Low*0.4)+(Moderate*0.7)+(High*1))/(Unburned+V_Low+Low+Moderate+High))
 # Sites: Locations of each site, includes grouping and type of body of water
-Sites <- read.csv('data/CPF_Sites.csv')
+Sites <- read.csv('data/field_chemistry/metadata/cpf_sites.csv')
 #dist_from_pbd: distance from PBD (mouth of canyon) using NHD flowline
-dist_from_pbd <- read.csv('data/Distance_from_PBD.csv')
+dist_from_pbd <- read.csv('data/field_chemistry/metadata/distance_from_pbd.csv')
+
 
 
 ## site groupings
@@ -35,5 +36,7 @@ fcgov_study <- c("CHD", "BMD","JWC", "PJW", "PBR", "SFM", "PSF", "PNF", "PBD")
 #SF and Weekly study reservoirs
 all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 
+genomic_sites <- c("LEGC", "TMBR", "TIMB", "ELC", "ARCH", "BOX1", "BOX2", "BOX3", "BOX4")
 ## Color sets
 cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
