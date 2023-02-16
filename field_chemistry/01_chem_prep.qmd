@@ -152,15 +152,19 @@ write_feather(reservoir_chemistry, "data/field_chemistry/cleaned/reservoir_chem_
 
 ```{r}
 
-#check start and end dates
-summary(reservoir_chemistry)
+
 
 # number of samples per site per year
-res_samples_year_site <- reservoir_chemistry%>%
-  group_by(Year, site_code)%>%
-  dplyr::summarise( n = n())
+res_campaign_by_year <- reservoir_chemistry%>%
+  group_by(Year, Campaign)%>%
+  summarise( sample_count = n())%>%
+  ungroup()%>%
+  ##pivot the data so that each campaign is a column
+  pivot_wider(names_from = "Campaign", values_from = "sample_count")%>%
+  # replace all NAs with 0
+  mutate_at(vars(-Year), ~replace(., is.na(.), 0))
 
-summary(res_samples_year_site)
+print(res_campaign_by_year, n = length(res_campaign_by_year$Year))
 
 
 #Determning number of Samples....
@@ -189,7 +193,12 @@ campaign_by_year <- rmrs_chemistry%>%
   mutate_at(vars(-year), ~replace(., is.na(.), 0))
 
 
+
+
 print(campaign_by_year, n = length(campaign_by_year$year)) 
+
+#create a similar data frame as campaign_by_year but using the reservoir_chemistry data frame
+
 
 # number of unique chla measurements
 unique_chla <- rmrs_chemistry%>%
@@ -218,11 +227,7 @@ res_icp <- read_csv("data/field_chemistry/raw/ReservoirStudy_ICPData.csv")%>%
 
 res_longer <- reservoir_chemistry%>%
   left_join(res_icp, by = "FCW_Number")%>%
-    # select(-c(IDNo, 
-    #         SiteDescr,
-    #         watershed, 
-    #         Lat, Long,
-    #         order, Xdistance, SampleType, Location, Distance, Site, SiteLabel))%>%
+    select(-c(Lat, Long, order, Xdistance, Distance, Site))%>%
   pivot_longer(cols = c(ChlA, Turbidity, TSS, DOC, DTN, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3, Al, P, Mn, Fe), names_to = "Parameter",values_to = "Measurement" )
 
 
@@ -248,7 +253,7 @@ write_csv(reservoir_chemistry_concise,
 
 ```
 
-## Playing with FCGOV DATA
+## Combining RMRS and FcGov datasets
 
 ```{r}
 
@@ -284,6 +289,26 @@ combined_mainstem <- filter(reservoir_chemistry, location == "Mainstem")%>%
          fire = ifelse(Date > "2020/8/1", "Cameron Peak", "High Park"))%>%
   select(-c(Lat, Long, location, Campaign, watershed, status, season))
   combined_mainstem$site_code = factor(combined_mainstem$site_code, levels = c("JWC", "PJW","SLEP", "PBR", "SFM","PSF","PNF", "PBD"  ))
+
+```
+
+### Graphing
+```{r}
+
+combined_graph <- filter(combined_mainstem, site_code %in% c("JWC" , "PJW", "PBR", "PSF", "PNF", "PBD")
+                                                              & Year <= 2021 & Year >= 2019)%>%
+  ggplot()+
+  geom_point(aes(x = dayofyear, y = NO3, group = interaction(Year, collector), color = Year, shape = collector),size = 3, alpha = .5)+
+  geom_line(aes(x = dayofyear, y = NO3, group = interaction(Year, collector),  color = Year), size = 1)+
+  scale_shape_manual(values =  c(15, 17))+
+  theme_bw()+
+  facet_wrap(~site_code, ncol = 3)+
+  scale_color_viridis_b()
+
+ggplotly(combined_graph)
+
+
+
 #graphing yearly changes in nutrients pre/post fire
 combined_graph <- filter(combined_mainstem, site_code %in% c("PBR"))%>%
   ggplot()+
@@ -330,3 +355,4 @@ combined_boxplot_SC <- filter(combined_mainstem, site_code %in%c("PBR" ,"PJW", "
   facet_wrap(~fire+collector)
 plot(combined_boxplot_SC)
 ```
+
