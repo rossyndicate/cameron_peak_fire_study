@@ -14,41 +14,14 @@ This document is to work on graphs related to nutrients from Reservoirs/ mainste
 Loading packages and creating lists of sites based on location/grouping
 
 ```{r}
-library(tidyverse)
-library(ggplot2)
-library(ggpubr)
-library(ggthemes)
-library(scales)
-library(corrplot)
-library(lubridate)
-library(sf)
-#library(mapview)       Takes time to load, not using it yet
-library(plotly)
-library(padr)
-library(dplyr)
-library(gghighlight)
-
-cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-## This is where i will read in data
-mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
-mainstem_Res_only <-c("CBRR", "JOER", "PTRR",  "BRNR", "LNGR")
-
-SF_Res <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO", "BEAV", "SFM")
-
-mainstem_sites <- c("JWC","PJW","SLEP","PBR","SFM","PSF","PNF","PBD")
+source("package_loader.R")
+source("field_chemistry/00_colors_and_groups.R")
 
 
-all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
+reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")%>%
+  mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")))
 
-reservoir_chemistry <- read.csv("data/prepped_reservoir_chemistry.csv")%>%
-  mutate(Date = as.Date(Date),
-         Location = factor(Location, levels = c("Inflow","Reservoir", "Outflow", "Mainstem")))
 
-colorsBS <- c("Barnes Meadow Reservoir" = "#D55E00", "Chambers Lake" = "#E69F00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
-
-colorsBS_site_code <- c("BRNR" = "#D55E00", "CBRR" = "#F0E442", "JOER" = "#56B4E9", "LNGR" = "#0072B2", "PTRR" ="#E69F00" )
-
-colorsBS_in_order <-c("#0072B2","#56B4E9","#F0E442","#E69F00","#D55E00")
 ```
 
 # Chl-A Plots
