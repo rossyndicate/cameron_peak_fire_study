@@ -38,28 +38,38 @@ reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem
 
 ```{r}
 
-days_meso <- filter(reservoir_chemistry, ChlA >= 2.6 &ChlA <= 8)%>%
-group_by(site_code, Year)%>%
-  summarise(days_meso = n())%>%
-  ungroup()
+chla_status_site_year <- reservoir_chemistry%>%
+  filter(!is.na(ChlA))%>%
+  mutate(eu_status  = case_when(ChlA >= 2.6 &ChlA <= 8 ~ "Mesotrophic", 
+                                ChlA > 8 ~ "Eutrophic",
+                                ChlA < 2.6 ~ "Oligotrophic"))%>%
+  group_by(site_code, Year, eu_status)%>%
+  summarise(eu_stats = n())%>%
+  ungroup()%>%
+  pivot_wider(names_from = eu_status, values_from = eu_stats)%>%
+  mutate_at(vars(-Year), ~replace(., is.na(.), 0))%>%
+  rowwise()%>%
+  mutate(total_samples = sum(c(Eutrophic, Mesotrophic, Oligotrophic)),
+    perc_eu = (Eutrophic/total_samples)*100, 
+         perc_meso = (Mesotrophic/total_samples)*100,
+         perc_meso_eu = ((Eutrophic+Mesotrophic)/total_samples)*100, 
+        perc_oligo = (Oligotrophic/total_samples) *100,
+    Year = as.character(Year))
 
-days_eu <- filter(reservoir_chemistry, ChlA >= 8)%>%
-  group_by(site_code, Year)%>%
-  summarise(days_eu = n())%>%
-  ungroup()
+long_chla_status <- chla_status_site_year%>%
+  select(site_code, Year, total_samples, perc_eu, perc_meso, perc_meso_eu, perc_oligo)%>%
+  pivot_longer(cols = c(perc_eu, perc_meso, perc_meso_eu, perc_oligo), names_to = "category", values_to = "value" )
 
-days_meso_eu <- reservoir_chemistry%>%
-  select(Date, ChlA, Year, site_code)%>%
-  na.omit()%>%
-  group_by(site_code, Year)%>%
-  summarise( n = n(),
-             mean_chlA = mean(ChlA))%>%
-  ungroup()%>% 
-  left_join(days_meso, by = c("Year", "site_code"))%>%
-  left_join(days_eu, by = c("Year", "site_code"))%>%
-  mutate(perc_eu = (days_eu/n)*100, 
-         perc_meso = (days_meso/n)*100,
-         perc_meso_eu = ((days_eu+days_meso)/n)*100)
+status_plot <- long_chla_status%>%
+  filter(site_code %in% mainstem_Res_only )%>%
+  ggplot(aes(x = Year, y = value,group = site_code, color =  site_code))+
+  scale_color_manual(values = colorsBS_site_code)+
+ geom_line()+
+   geom_point()+
+  theme_bw(base_size = 15)+
+facet_wrap(~category)
+plot(status_plot)
+
 
 
 chla_per_year <-reservoir_chemistry%>%
