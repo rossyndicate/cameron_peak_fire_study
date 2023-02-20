@@ -18,6 +18,8 @@ dist_from_pbd <- read.csv('data/field_chemistry/metadata/distance_from_pbd.csv')
 
 
 ## site groupings
+#JW and Chambers complex
+jw_chambers_complex <- c("JOEI", "JOER", "CBRR", "CBRI", "CHD")
 
 #Weekly reservoir study sites
 mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
@@ -40,3 +42,15 @@ genomic_sites <- c("LEGC", "TMBR", "TIMB", "ELC", "ARCH", "BOX1", "BOX2", "BOX3"
 ## Color sets
 cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
+#Color for reservoirs, matches burn severity
+colorsBS <- c("Barnes Meadow Reservoir" = "#D55E00", "Chambers Lake" = "#E69F00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
+
+#Color for reservoirs, matches burn severity by site code
+
+colorsBS_site_code <- c("BRNR" = "#D55E00", "CBRR" = "#F0E442", "JOER" = "#56B4E9", "LNGR" = "#0072B2", "PTRR" ="#E69F00" )
+
+#Color matches burn severity
+colorsBS_in_order <-c("#0072B2","#56B4E9","#F0E442","#E69F00","#D55E00")
+
+#Seasonal Color values
+season_color_vals =c('#047E82','#397534','#59B851','#DEB907','#FA850E')
