@@ -398,9 +398,15 @@ cbri_data <- filter(reservoir_chemistry, site_code %in% c( "CBRI")& Year >2020)%
          location = "Outflow", 
          site_code = "JOEO")
 
-comparison_plots_df <- filter(reservoir_chemistry, site_code %in% c("CBRR","CHD","JOEI", "JOER", "CBRI", "BRNR" ,"BMD")& Year >2020)%>%
+comparison_plots_df <- filter(reservoir_chemistry, site_code %in% mainstem_res_set & Year >2020)%>%
   bind_rows(cbri_data)%>%
-  mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")))%>%
+  filter( Date > "2021-05-30")%>%
+  mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")), 
+         watershed  = factor(watershed, levels = c("Long Draw Reservoir", 
+                             "Joe Wright Reservoir", 
+                             "Chambers Reservoir", 
+                             "Peterson Reservoir", 
+                             "Barnes Meadow Reservoir")))%>%
   pivot_longer(cols = c(ChlA, Turbidity, TSS, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3, DOC, DTN),names_to = "param", values_to = "value")
 
 plot_comparison_timeline <- function(nutrient){
@@ -408,42 +414,38 @@ plot_comparison_timeline <- function(nutrient){
   param_label <- filter(meta_units_table, Parameters == nutrient)%>%
     select(combined)%>%
     pull()
+  
   compare_df <- filter(comparison_plots_df, param == nutrient)%>%
     filter(!is.na(value))
   
 comparison_plot <-  ggplot(compare_df)+
-  geom_point(aes(x=Date, y = value, color=watershed, shape=watershed), size= 2)+
-  geom_path(aes(x=Date, y = value, group=site_code, color = watershed))+
- # geom_textpath(data = dplyr::filter(reservoir_chemistry, site_code %in% c("JOER","JOEI")& Year == 2022), aes(x=Date, y=NO3, group=site_code, color=Buffer_Level, size=3, label=Watershed), size=4, fontface=2, hjust=0.9, vjust=0.0) +
- # geom_textpath(data = dplyr::filter(reservoir_chemistry, site_code %in% c("CBRR","CBRI","CHD")& Year == 2022), aes(x=Date, y=NO3, group=site_code, color=Buffer_Level, size=3, label=Watershed), size=4, fontface=2, hjust=0.1, vjust=0.0) 
-  scale_fill_manual(values = cbbPalette )+
-#scale_color_gradient2(name="Res. Burn  Severity Index (0-1)",
-                        #low="#56B4E9", mid="#F0E442", high="#D55E00", 
-                        #guide="colourbar", midpoint=0.225, limits=c(0,0.45576),)+
-#facet_wrap(~Year, scales ="free_x")+
+  geom_point(aes(x=Date, y = value, color=watershed, shape=watershed), size = 2.5)+
+  geom_path(aes(x=Date, y = value, group=site_code, color = watershed), size = 1 )+
+  #scale_fill_manual(values = colorsBS )+
+  scale_color_manual(values = colorsBS)+
 facet_wrap(~location + Year, scales = "free_x", ncol = 2, nrow = 3)+
-theme_bw()+
+theme_bw(base_size = 15)+
   theme(#legend.position = "none", 
          axis.text=element_text(size=12),
          axis.title=element_text(size=14,face="bold")) +
-#ggtitle("NO3 in CPF Reservoirs 2021-2022")+
 ylab(param_label)
 
 return(comparison_plot)
 }
 
-NO3<- plot_comparison_timeline("NO3")
-ChlA <- plot_comparison_timeline("ChlA")
-DOC <- plot_comparison_timeline("DOC")
-DTN <- plot_comparison_timeline("DTN")
-K <- plot_comparison_timeline("K")
-
-nutrient_list <- select(meta_units_table, Parameters)%>%
+nutrient_list<- select(meta_units_table, Parameters)%>%
     pull()
+
+
 comparison_plots_list<- map(nutrient_list, plot_comparison_timeline)
 
+for(i in 1:length(comparison_plots_list)){
+  nutrient_list
+  plot(comparison_plots_list[[i]])
+  
+}
 
-ggsave("output/Facet_NO3_JW_CHAMBERS.jpg", width = 11, height = 9)
+
 
 
 ```
