@@ -45,8 +45,8 @@ ISCO <- c("FISH_ISCO", "SAWM_ISCO", "BLAK_ISCO", "LBEA_ISCO", "FALL_ISCO")
 ## Color sets
 cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
-#Color for reservoirs, matches burn severity
-colorsBS <- c("Barnes Meadow Reservoir" = "#D55E00", "Chambers Lake" = "#E69F00", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
+#Color for watersheds, matches burn severity
+colorsBS <- c("Barnes Meadow Reservoir" = "#D55E00", "Peterson Reservoir" ="#E69F00", "Chambers Reservoir" = "#F0E442", "Joe Wright Reservoir" = "#56B4E9", "Long Draw Reservoir" = "#0072B2")
 
 #Color for reservoirs, matches burn severity by site code
 
