@@ -39,6 +39,9 @@ fcgov_study <- c("CHD", "BMD","JWC", "PJW", "PBR", "SFM", "PSF", "PNF", "PBD")
 all_res_system <- c("COMI", "COMR", "COMO", "HORI","HORR" , "HORO","CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
 
 genomic_sites <- c("LEGC", "TMBR", "TIMB", "ELC", "ARCH", "BOX1", "BOX2", "BOX3", "BOX4")
+
+# Isco rmrs cpf sites
+ISCO <- c("FISH_ISCO", "SAWM_ISCO", "BLAK_ISCO", "LBEA_ISCO", "FALL_ISCO")
 ## Color sets
 cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
