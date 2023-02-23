@@ -446,8 +446,6 @@ for(i in 1:length(comparison_plots_list)){
 }
 
 
-
-
 ```
 
 # Trends across location
