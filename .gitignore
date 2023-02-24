@@ -9,3 +9,7 @@ CPL/
 future_targets/
 cpf_targets/_targets/
 data
+.DS_Store
+test_fig/
+cpf_targets/.DS_Store
+field_chemistry/.DS_store
