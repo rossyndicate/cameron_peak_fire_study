@@ -38,7 +38,9 @@ pack_req <- c("tidyverse",
               "padr", 
               "gghighlight", 
               "geomtextpath", 
-              "ggbeeswarm")
+              "ggbeeswarm",
+              "broom", 
+              "trend")
 package_load(pack_req)
 
 devtools::install_github("anguswg-ucsb/cdssr")
