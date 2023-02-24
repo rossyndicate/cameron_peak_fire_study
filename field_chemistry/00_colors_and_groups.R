@@ -1,6 +1,7 @@
 #this file contains all the metadata, groupings and color palettes that are used in all the other field_chemistry scripts
 
-
+#functions
+`%nin%` = Negate(`%in%`)
 
 ## Importing data
 

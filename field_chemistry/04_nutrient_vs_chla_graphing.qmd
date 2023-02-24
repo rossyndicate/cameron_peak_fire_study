@@ -75,6 +75,7 @@ two_nutrient_graph <- function(nutrient_x, nutrient_y){
   theme_bw(base_size=15) +
   labs( x = param_label_x, y = param_label_y)
   
+
   return(nutrient_vs_nutrient)
 }
 
