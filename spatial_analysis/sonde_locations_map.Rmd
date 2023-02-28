@@ -1,0 +1,34 @@
+---
+title: "Sonde Locations CPF Study"
+author: "Sam Struthers"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Set up
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("package_loader.R")
+
+# Load data from sonde_locations.csv 
+sonde_locations <- read.csv("data/spatial/sonde_sites/potential_sonde_locations.csv", header = TRUE)%>%
+  # seperate lat and long into seperate columns using , as a delimiter
+    separate(lat_long, c("lat", "long"), sep = ",")%>%
+    # convert lat and long to numeric
+    mutate(lat = as.numeric(lat), long = as.numeric(long))%>%
+    # using lat and long convert the dataframe into a sf object projected to crs 4326
+    st_as_sf(coords = c("long", "lat"), crs = 4326)%>%
+    #rename the column CPRW. to CPRW_Sensor?
+    rename(CPRW_Sensor = CPRW.)
+
+    #Create a map of the sonde locations using mapview
+    # color blue if CPRW_Sensor = yes and don't color if CPRW_Sensor = no
+
+    mapview::mapview(filter(sonde_locations, CPRW_Sensor == "yes"),layer.name = "CPRW Sonde?", col.regions = "blue1")+
+  mapview::mapview(filter(sonde_locations, LC_colocate == "yes"), layer.name = "Larimer County Co-Locate",col.regions = "red3")+
+       mapview::mapview(filter(sonde_locations, new_install == "yes"& CPRW_Sensor == "no"), layer.name = "Entirely New Install",col.regions = "orange1")+
+       mapview::mapview(filter(sonde_locations, current_network == "yes"), layer.name = "Current WQ Sensors",col.regions = "green4")
+    
+
+```
