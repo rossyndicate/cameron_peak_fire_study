@@ -1,0 +1,90 @@
+---
+title: "Longitudinal mapping of Reservoir -> River Connection"
+author: "Sam Struthers"
+format: html
+editor: visual
+self-contained: true
+---
+
+## Goals
+
+This document is to work on graphs related to nutrients from Reservoirs/ mainstem
+
+### Importing
+
+Loading packages and creating lists of sites based on location/grouping
+
+```{r}
+source("package_loader.R")
+source("field_chemistry/00_colors_and_groups.R")
+
+
+reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")%>%
+  mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")))
+
+
+```
+
+## Data frame creation
+
+```{r}
+
+
+res_chla_2021 <- filter(reservoir_chemistry, site_code %in% jw_chambers_complex & Year == 2021)
+
+# filter reservoir chemistry for 2022
+# only use sites from all_res_system and mainstem_sites
+
+all_system_2022 <- filter(reservoir_chemistry, site_code %in% c(all_res_system, mainstem_sites) & 
+                            Year == 2022)
+  filter(Date >= "2022-06-01")
+  ## find all the weeks where each site has data for ChlA and name the column all_sites_chla, make it true if all the sites are present
+   all_sites_chla <- all_system_2022%>%
+     select(ChlA, Date, 
+            #Date_week, 
+            site_code)%>%
+  pad(group = "site_code")%>% 
+  thicken('week')
+   
+   all_sites_true <-all_sites_chla %>%
+     summarise(all_sites_chla = all(!is.na(ChlA)))%>%
+     ungroup()%>%
+     filter(all_sites_chla == TRUE)
+     
+
+ 
+
+```
+
+## Functionalize pivoting for var
+
+```{r}
+
+get_ratios_2022 <- function(nutrient){
+}
+  
+  nutrient_ratios <- all_system_2022%>%
+    dplyr::select(Date,
+         site_code,
+         nutrient)%>%
+  drop_na()%>%
+  distinct()%>%
+  pivot_wider(names_from = site_code, values_from = nutrient)%>%
+    thicken(interval = 'week')
+  
+  # %>%
+  #   filter(Date_week %in% c("2022-08-21",
+  #                           "2022-07-24",
+  #                           "2022-07-10", 
+  #                           "2022-09-04", 
+  #                           "2022-09-18",
+  #                           "2022-10-02", 
+  #                           "2022-10-16"))
+  # mutate(jw_ratio = CBRI / JOEI,
+  #        chambers_ratio = CHD/ CBRI, 
+  #        Year = year(Date))
+
+
+
+```
+
