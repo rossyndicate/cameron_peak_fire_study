@@ -178,8 +178,6 @@ nutrient_boxplot_graph <-  function(nutrient, title = FALSE, graph_size = 28){
 
 ```
 
-
-
 # Graphing
 
 These are collected from grab samples at our reservoir sites. Samples are collected weekly between June and November and analyzed for key nutrients.
@@ -594,9 +592,6 @@ ggsave("output/location_Grouped_Chla_Boxplot.jpg", width = 11, height = 9)
 
 ```
 
-
-
-
 ## NO3/K ratio
 
 ```{r}
@@ -672,8 +667,6 @@ k_no3_vs_chla <- res_chem_k_no3%>%
 
 #ggsave("test_fig/k_no3_vs_chla.jpg", width = 11, height = 9)
 ```
-
-
 
 ## Means
 
