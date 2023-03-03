@@ -120,24 +120,29 @@ all_param_df <- reservoir_chemistry_long%>%
 
 t_test_df <- all_param_df%>%
   mutate(t_test_model = map(data, ~ t.test(.x$value)),
-         # p_value = map(data, ~ t.test(.x$value)$p.value),
-         # t_statistic = map(data, ~ t.test(.x$value)$statistic),
-         # df = map(data, ~ t.test(.x$value)$parameter),
+          t_test = map(t_test_model, ~ .$statistic),
+          p_value = map(t_test_model, ~ .$p.value),
          mean = map(data, ~ mean(.x$value)),
          sd = map(data, ~ sd(.x$value)),
          n = map(data, ~ length(.x$value)))%>%
-  unnest(t_test_model)
-  %>%
   mutate(t_test = as.numeric(t_test),
          p_value = as.numeric(p_value),
-         t_statistic = as.numeric(t_statistic),
-         df = as.numeric(df),
+         # t_statistic = as.numeric(t_statistic),
+         # df = as.numeric(df),
          mean = as.numeric(mean),
          sd = as.numeric(sd),
-         n = as.numeric(n))%>%
-  select(site_code, param, t_test, p_value, t_statistic, df, mean, sd, n)
+         n = as.numeric(n),
+         trend = ifelse(p_value < 0.01, 'yes', 'no'))%>%
+  select(site_code, param, p_value, mean, sd, n, trend)
 
-
+ggplot(filter(t_test_df, param %nin% c("ANC", "PO4", "TSS", "Turbidity")) , aes(x = site_code, y = mean, color = site_code)) + 
+## add a dashed black line at 0
+geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_point() + 
+  theme_few() + 
+  facet_wrap(~param, scales = "free")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.pos = c(0.8, 0.1))
 
 
 
