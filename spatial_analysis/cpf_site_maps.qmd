@@ -6,16 +6,7 @@ editor: visual
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message=F, warning=F)
-library(tidyverse)
-library(sf)
-library(mapview)
-library(ggplot2)
-knitr::opts_knit$set(root.dir = "~/Repositories/cameron_peak_fire_study")
-library(ggspatial)
-library(ggpattern)
-library(nhdplusTools)
-library(ggrepel)
+source("package_loader.R")
 ```
 
 ## Import datasets
@@ -44,9 +35,9 @@ CPF_sites <- read_csv('data/cpf_sites.csv' ) %>%
                    ifelse(site_code %in% c('BRNR','BMD'),"Barnes Meadow Reservoir",
                    ifelse(site_code %in% c('COMR','COMO','COMI'),"Comanche Reservoir",
                           ifelse(site_code %in% c('HORO','HORI','HORR'),"Hourglass Reservoir","CLP Tributary" ))))))))))%>%
-  left_join(select(buffer_sbs,c(watershed,Buffer_Level)),by="watershed") %>%
-  left_join(select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code")%>%
-  left_join(select(dist_from_pbd,c(site_code,distance_upstream_km)),by="site_code")%>%
+  left_join(dplyr::select(buffer_sbs,c(watershed,Buffer_Level)),by="watershed") %>%
+  left_join(dplyr::select(watershed_sbs,c(site_code,Watershed_Level)),by="site_code")%>%
+  left_join(dplyr::select(dist_from_pbd,c(site_code,distance_upstream_km)),by="site_code")%>%
    mutate(site_type=ifelse(Type %in% c('Outflow','Inflow'),"Stream",
                    ifelse(Type %in% c("Stream"),'Tributary',
                     ifelse(Type %in% c("Mainstem"),'Mainstem',"Reservoir"))))
@@ -215,5 +206,33 @@ south_fork_map <- ggplot(sf_res_sites) +
   plot(south_fork_map)
   ggsave("output/sf_res_map_draft1.jpg", height = 8, width = 12)
 
+
+```
+
+CPRW Sites
+
+```{r}
+folder_path <-"~/Documents/fork_yeah/cameron_peak_fire_study/data/spatial"
+
+file_names <- tibble(file_name  = list.files(folder_path, 
+                                recursive = TRUE, 
+                                full.names = TRUE))%>%
+  filter(grepl(".shp",file_name)&!grepl("xml",file_name))%>%
+  pull()
+
+prelim_2023_sites <- st_read(file_names[1])
+cdphe_2021 <- st_read(file_names[2])
+cdphe_2022 <- st_read(file_names[3])
+cherokee_park <-  st_read(file_names[4])
+elkhorn_crk  <- st_read(file_names[5])
+red_feather <- st_read(file_names[6])
+
+mapview::mapview(prelim_2023_sites, col.regions = "red")+
+mapview::mapview(cdphe_2021, col.regions = "cyan")+
+  mapview::mapview(cdphe_2022, col.regions = "purple")+
+  mapview::mapview(cherokee_park, col.regions = "blue")+
+  mapview::mapview(elkhorn_crk, col.regions = "orange")+
+  mapview::mapview(red_feather, col.regions = "green")+
+  mapview::mapview(CPF_sites, col.regions = "white", cex = "6")
 
 ```
