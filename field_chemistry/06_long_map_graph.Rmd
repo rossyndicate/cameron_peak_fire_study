@@ -23,6 +23,7 @@ reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem
   mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")))
 
 
+
 ```
 
 ## Data frame creation
@@ -35,24 +36,9 @@ res_2021 <- filter(reservoir_chemistry, site_code %in% jw_chambers_complex & Yea
 # filter reservoir chemistry for 2022
 # only use sites from all_res_system and mainstem_sites
 
-all_system_2022 <- filter(reservoir_chemistry, site_code %in% c(all_res_system, mainstem_sites) & 
+all_system_2022 <- filter(reservoir_chemistry, site_code %in% c(all_res_system, mainstem_sites, "BEAV") & 
                             Year == 2022)
-  filter(Date >= "2022-06-01")
-  ## find all the weeks where each site has data for ChlA and name the column all_sites_chla, make it true if all the sites are present
-   all_sites_chla <- all_system_2022%>%
-     select(ChlA, Date, 
-            #Date_week, 
-            site_code)%>%
-  pad(group = "site_code")%>% 
-  thicken('week')
-   
-   all_sites_true <-all_sites_chla %>%
-     summarise(all_sites_chla = all(!is.na(ChlA)))%>%
-     ungroup()%>%
-     filter(all_sites_chla == TRUE)
-     
 
- 
 
 ```
 
@@ -60,37 +46,148 @@ all_system_2022 <- filter(reservoir_chemistry, site_code %in% c(all_res_system, 
 
 ```{r}
 
+nutrient = "ChlA"
+
 get_ratios_2022 <- function(nutrient){
 }
   
-  nutrient_ratios <- all_system_2022%>%
-    dplyr::select(Date,
+  nr <- all_system_2022%>%
+    dplyr::select(date = Date,
          site_code,
-         nutrient)%>%
-  drop_na()%>%
-  distinct()%>%
+         all_of(nutrient))%>%
   pivot_wider(names_from = site_code, values_from = nutrient)%>%
-    thicken(interval = 'week')
+    filter(date %nin% genomic_dates)
+  ## Remove rows were all columns other than Date are NA
+ nr_no_na_rows <- nr[rowSums(is.na(nr)) != (ncol(nr)-1), ]%>%
+   thicken(interval = "week", 
+           start_val = as.Date("2022-05-30"))
+# remove the date column and consolidate the rows by date_week
+  nr_concise <- nr_no_na_rows%>%
+    select(-date)%>%
+    pivot_longer(cols = c(-date_week), 
+                 names_to = "site",
+                 values_to = "value")%>%
+    drop_na()%>%
+  pivot_wider(names_from = site, values_from = value)
   
-  # %>%
-  #   filter(Date_week %in% c("2022-08-21",
-  #                           "2022-07-24",
-  #                           "2022-07-10", 
-  #                           "2022-09-04", 
-  #                           "2022-09-18",
-  #                           "2022-10-02", 
-  #                           "2022-10-16"))
-  # mutate(jw_ratio = CBRI / JOEI,
-  #        chambers_ratio = CHD/ CBRI, 
-  #        Year = year(Date))
+
+    
+  nr_final_df <- nr_concise%>%
+    mutate(JOEI_JOER  = (JOEI/JOER)*100, 
+           JOER_CBRI = (JOER/CBRI)*100, 
+           CBRI_CBRR = (CBRI/CBRR)*100, 
+           CBRR_CHD = (CBRR/CHD)*100, 
+           CHD_JWC = (CHD/JWC)*100, 
+           BRNR_BMD = (BRNR/BMD)*100, 
+           BMD_JWC = (BMD/JWC)*100, 
+           PTRR_PTRO = (PTRR/PTRO)*100, 
+           PTRO_PJW = (PTRO/PJW)*100, 
+           LNGR_LNGO = (LNGR/LNGO)*100, 
+           LNGO_PJW = (LNGO/PJW)*100, 
+           JWC_SLEP = (JWC/SLEP)*100,
+           PJW_SLEP = (PJW/SLEP)*100, 
+           SLEP_PBR = (SLEP/PBR)*100, 
+           PBR_PSF = (PBR/PSF)*100, 
+           COMI_COMR = (COMI/COMR)*100, 
+           COMR_COMO = (COMR/COMO)*100, 
+           COMO_BEAV =  (COMO/BEAV)*100 , 
+           HORI_HORR = (HORI/HORR)*100, 
+           HORR_HORO = (HORR/HORO)*100, 
+           HORO_BEAV = (HORO/BEAV)*100, 
+           BEAV_SFM = (BEAV/SFM)*100, 
+           SFM_PSF = (SFM/PSF)*100, 
+           PSF_PNF = (PSF/PNF)*100, 
+           PNF_PBD = (PNF/PBD)*100
+           )%>%
+    pivot_longer(., cols = -date_week, names_to = "site_code", values_to = nutrient)
+  
+
+
+```
+### Set up spatial data
+
+```{r}
+
+  up_and_down_sites <- nr_final_df %>%
+  distinct(site_code) %>%
+  filter(site_code %nin% c(all_res_system, mainstem_sites, "BEAV")) %>%
+  mutate(site_one= str_extract(site_code, "^[A-Z]+"),
+         site_two = str_extract(site_code, "[A-Z]+$"),
+         site_ratio = site_code) %>%
+  left_join(Sites, by = c("site_one" = "site_code")) %>%
+  dplyr::rename(lat1 = Lat, long1 = Long) %>%
+  left_join(Sites, by = c("site_two" = "site_code")) %>%
+  dplyr::rename(lat2 = Lat, long2 = Long) %>%
+  select(site_ratio, lat1, long1, lat2, long2)
+
+up_site_lines <- select(up_and_down_sites, site_ratio, Long = long1, Lat = lat1)%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)
+down_site_lines <- select(up_and_down_sites, site_ratio, Long = long2, Lat = lat2)%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)
+
+site_lines <-st_union(up_site_lines, down_site_lines)%>%
+  filter(site_ratio == site_ratio.1)%>%
+  st_cast(to = "LINESTRING")%>%
+  dplyr::select(site_code = site_ratio, geometry)
+
+
+site_points <- Sites%>%
+  dplyr::select(site_code, Lat, Long)%>%
+  filter(site_code %in% c(all_res_system, mainstem_sites, "BEAV"))%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)
+```
+
+
+### Join ratio and spatial
+```{r}
+
+
+nutrient_ratios_lines <- nr_final_df %>%
+  inner_join(site_lines, by = "site_code")%>%
+  st_sf()%>%
+  dplyr::rename(percent_change = ChlA )
+
+
+
+
+nutrient_ratios_points <- nr_final_df %>%
+  inner_join(site_points, by = "site_code")%>%
+  st_sf()
 
 
 
 ```
 
+
+## Plot
+
+```{r}
+
+tester <- tm_shape(nutrient_ratios_points, name = "Sampling Locations")+
+  tm_bubbles(size = "ChlA")+
+  tm_shape(nutrient_ratios_lines, name = "Sampling Locations")+
+  tm_lines(size = "percent_change")+
+  tm_facets(along = "date_week", free.coords = FALSE, free.scales.symbol.size = FALSE,
+            nrow = 1, ncol = 1)
+
+
+
+
+tester
+tester_lines
+tmap_animation(tester, filename = "output/spatial/chla_tester_points.gif", width = 1200, height = 600, delay = 15)
+tmap_animation(tester_lines, filename = "output/spatial/chla_tester_lines.gif", width = 1200, height = 600, delay = 15)
+
+```
+
+
+
+
+
 ## Functionalize 2021 JOER/CBRR dataset
 
 ```{r}
+
 
 plot_long_jw_ch <- function(param, year = 2021,  title = FALSE){
 
@@ -104,14 +201,7 @@ plot_long_jw_ch <- function(param, year = 2021,  title = FALSE){
            CBRI_CBRR = CBRR/CBRI,
            CBRR_CHD = CHD/CBRR)
   
-  
-# #create a boxplot of the columns JOEI_JOER, JOER_CBRI, CBRI_CBRR and CBRR_CHD
-#   boxplot(ratio_for_param[,c("JOEI_JOER", "JOER_CBRI", "CBRI_CBRR", "CBRR_CHD")],
-#           main = paste0("Boxplot of ", param, " ratios for 2021"),
-#           xlab = "Site",
-#           ylab = "Ratio",
-#           col = "lightblue",
-#           names = c("JOEI/JOER", "JOER/CBRI", "CBRI/CBRR", "CBRR/CHD"))
+
   
 # create a mean_2021 dataframe that has the mean of JOEI, JOER, CBRI, CBRR and CHD
 #pivot longer and name the columns "site" and "value"
