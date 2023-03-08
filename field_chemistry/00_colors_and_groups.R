@@ -15,7 +15,8 @@ watershed_sbs <- read_csv('data/field_chemistry/metadata/sbs_watershed.csv') %>%
 Sites <- read.csv('data/field_chemistry/metadata/cpf_sites.csv')
 #dist_from_pbd: distance from PBD (mouth of canyon) using NHD flowline
 dist_from_pbd <- read.csv('data/field_chemistry/metadata/distance_from_pbd.csv')
-
+#Dates for genomic survey
+genomic_dates <- as.Date(c("2022-06-22", "2022-08-25", "2022-09-19"))
 
 
 ## site groupings
