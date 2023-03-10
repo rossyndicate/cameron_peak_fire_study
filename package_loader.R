@@ -40,7 +40,9 @@ pack_req <- c("tidyverse",
               "geomtextpath", 
               "ggbeeswarm",
               "broom", 
-              "trend")
+              "trend", 
+              "leaflet", 
+              "tmap")
 package_load(pack_req)
 
 devtools::install_github("anguswg-ucsb/cdssr")
