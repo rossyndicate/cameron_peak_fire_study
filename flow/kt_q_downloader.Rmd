@@ -170,7 +170,7 @@ Parameters available are:
 
 \- Precip
 
- - Stage
+-   Stage
 
 ## Downloader function
 

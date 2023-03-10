@@ -30,7 +30,17 @@ pack_req <- c("tidyverse",
               "devtools", 
               "plotly", 
               "arrow",
-              "jsonlite")
+              "jsonlite",
+              "ggpubr",
+              "ggthemes",
+              "scales",
+              "corrplot",
+              "padr", 
+              "gghighlight", 
+              "geomtextpath", 
+              "ggbeeswarm",
+              "broom", 
+              "trend")
 package_load(pack_req)
 
 devtools::install_github("anguswg-ucsb/cdssr")
@@ -39,6 +49,8 @@ library(cdssr)
 
 
 remove(pack_req, package_load)
+
+
 
 
        

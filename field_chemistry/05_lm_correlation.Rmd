@@ -9,6 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 source("package_loader.R")
 source("field_chemistry/00_colors_and_groups.R")
+
+
 ```
 
 # Linear Modeling of Nutrient and Algal dyanmics
@@ -26,17 +28,129 @@ source("field_chemistry/00_colors_and_groups.R")
     -   Seasons
 
 ```{r import}
-long_df <- read_feather("data/res_chem_cleaned/res_all_chem")
-fcgov_mainstem_df <- read_feather("data/res_chem_cleaned/fcgov_mainstem")
+long_df <- read_feather("data/field_chemistry/cleaned/res_all_chem")
+# Load data
+reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")
+# Load metadata for units
+meta_units_table <- read_csv("data/field_chemistry/Poudre_Portal_Data/Units_Cam_Peak.csv")
+fcgov_mainstem_df <- read_feather("data/field_chemistry/cleaned/fcgov_mainstem")
+
+reservoir_chemistry_long <- reservoir_chemistry%>%
+  pivot_longer(cols = c(ChlA, Turbidity, TSS, pH,ANC, Na, NH4, K, Mg, Ca, F, Cl, PO4, SO4, SC,NO3, DOC, DTN),names_to = "param", values_to = "value")
 
 ```
 
 ## Linear Model Function
 
+### Cleaning Model
+```{r}
+
+extract_slope <- function(sens_model){
+  
+  tidy(sens_model) %>%
+    mutate(slope = sens_model$estimates)
+  
+}
+```
+
 
 ```{r}
 
 
+
+reservoir_chemistry_nested <- reservoir_chemistry_long%>%
+  filter(Year > 2020& !is.na(value)& site_code %in% mainstem_res_set)%>%
+  arrange(Date)%>%
+  select(site_code, Date,param, value, Year, location, watershed, status, season )%>%
+  group_by(site_code, param)%>%
+  nest()
+
+res_system_chem_models <- reservoir_chemistry_nested%>%
+  mutate(sens_model = map(data, ~ sens.slope(.x$value)), 
+         tidy_sens = map(sens_model, extract_slope)) %>%
+  unnest(tidy_sens) %>%
+  select(site_code, param, p.value, slope) %>%
+  mutate(trend = ifelse(p.value < 0.01, 'yes', 'no'))%>%
+  left_join(Sites, by = "site_code")
+  
+
+res_only_models <- filter(res_system_chem_models, site_code %in% mainstem_Res_only& trend == "yes")%>%
+  filter(param != "ANC")
+ 
+ggplot(res_only_models,aes(x = param, y = slope, color = site_code)) + 
+## add a dashed balck line at 0
+geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_point() + 
+  theme_few() + 
+  scale_color_manual(values = colorsBS_site_code ) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.pos = c(0.8, 0.8))
+
+ggplot(filter(res_system_chem_models, param %nin% c("ANC", "SC")),aes(x = param, y = slope, color = trend)) + 
+## add a dashed balck line at 0
+geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_point() + 
+  theme_few() + 
+  scale_color_manual(values = c( "yes"= "green",  "no" = "red" ) ) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.pos = c(0.8, 0.8))+
+  facet_wrap(~location, nrow = 3, scales = "free")
+
+```
+ 
+ ## t-test for measured parameters
+```{r}
+# create a data frame with all the parameters
+all_param_df <- reservoir_chemistry_long%>%
+  filter(Year > 2020& !is.na(value)& site_code %in% mainstem_res_set)%>%
+  arrange(Date)%>%
+  select(site_code, Date,param, value, Year, location, watershed, status, season )%>%
+  group_by(site_code, param)%>%
+  nest()
+
+  # using all_param_df, create a data frame map over the data column and run a t-test
+  # on the value column
+  # save the t-test results in a new column called t_test
+  # save the p-value in a new column called p_value
+  # save the t-statistic in a new column called t_statistic
+  # save the degrees of freedom in a new column called df
+  # save the mean of the value column in a new column called mean
+  # save the standard deviation of the value column in a new column called sd
+  # save the number of observations in a new column called n
+
+t_test_df <- all_param_df%>%
+  mutate(t_test_model = map(data, ~ t.test(.x$value)),
+          t_test = map(t_test_model, ~ .$statistic),
+          p_value = map(t_test_model, ~ .$p.value),
+         mean = map(data, ~ mean(.x$value)),
+         sd = map(data, ~ sd(.x$value)),
+         n = map(data, ~ length(.x$value)))%>%
+  mutate(t_test = as.numeric(t_test),
+         p_value = as.numeric(p_value),
+         # t_statistic = as.numeric(t_statistic),
+         # df = as.numeric(df),
+         mean = as.numeric(mean),
+         sd = as.numeric(sd),
+         n = as.numeric(n),
+         trend = ifelse(p_value < 0.01, 'yes', 'no'))%>%
+  select(site_code, param, p_value, mean, sd, n, trend)
+
+ggplot(filter(t_test_df, param %nin% c("ANC", "PO4", "TSS", "Turbidity")) , aes(x = site_code, y = mean, color = site_code)) + 
+## add a dashed black line at 0
+geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+  geom_point() + 
+  theme_few() + 
+  facet_wrap(~param, scales = "free")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.pos = c(0.8, 0.1))
+
+
+
+```
+ 
+ 
+ #Old testing stuff
+```{r}
 
 linear_model_two_parameters<- function(parameter1, parameter2){
   
@@ -84,12 +198,16 @@ view(all_sites_all_param_lm)
 ## Plotting Linear models
 ```{r}
 
-ggplot(data = all_sites_all_param_lm, aes( x = m, y= r2))+
-  geom_point()+
-  theme_bw(base_size = 15)
+#plot linear models as line graphs using the and int values from the linear model data frame
+# using the package ggplot2
+
+
+
 
 
 ```
+
+## Function 
 
 ```{r}
 
@@ -137,6 +255,161 @@ tester <- site_linear_model_two_parameters("PO4")
 
 indv_sites_test_param_lm <- map(parameter2, site_linear_model_two_parameters)%>%
   dplyr::select(chla = x, param2 = y , int = intercept, m = slope, r2)
+
+
+
+```
+
+
+## Correlation testing
+
+```{r}
+
+parameter2 <- unique(long_df$Parameter)
+
+cor_by_site <- function(parameter2){
+  
+  cor_results <- tibble()
+  for(i in 1:length(unique(long_df$Parameter))){
+ parameter1 <- unique(long_df$Parameter[i])
+site_name <- "CBRR"
+
+  subset_df <- long_df%>%
+    filter(site_code %in% site_name)%>%
+    filter(Parameter %in% c(parameter1, parameter2))%>%
+    pivot_wider( names_from = Parameter, values_from = Measurement)%>%
+    dplyr::select(x= parameter1, y = parameter2)%>%
+    na.omit()
+  
+  cor_by_param <- cor(subset_df$x, subset_df$y)
+  
+  cor_indv <- tibble(
+      x = parameter1, 
+      y = parameter2, 
+      cor_value = cor_by_param
+    )
+  cor_results <- rbind(cor_indv, cor_results)
+  }
+  return(cor_results)
+  
+}
+
+
+
+
+test_cleaned <- tester%>%
+  distinct(cor_value, .keep_all = TRUE)%>%
+  filter(!is.na(cor_value)& cor_value != 1)%>%
+  mutate(cor_value = format(cor_value, scientific = FALSE), 
+         cor_correct = abs(as.double(cor_value)))
+
+
+
+```
+
+## Correlation across all sites
+
+```{r}
+
+
+cor_all_sites <- function(parameter2){
+  
+
+  cor_results <- tibble()
+  
+  for(i in 1:length(unique(long_df$Parameter))){
+ parameter1 <- unique(long_df$Parameter[i])
+
+
+  subset_df <- long_df%>%
+    filter(Parameter %in% c(parameter1, parameter2))%>%
+    pivot_wider( names_from = Parameter, values_from = Measurement)%>%
+    dplyr::select(x= parameter1, y = parameter2)%>%
+    na.omit()%>%
+    rowid_to_column()
+  
+  cor_by_param <- cor(subset_df$x, subset_df$y)
+  
+  cor_indv <- tibble(
+      x = parameter1, 
+      y = parameter2, 
+      cor_value = cor_by_param, 
+      n = max(subset_df$rowid)
+    )
+  cor_results <- rbind(cor_indv, cor_results)
+  }
+  return(cor_results)
+  
+}
+parameter2 <- unique(long_df$Parameter)
+all_sites_cor<- map(parameter2, cor_all_sites)%>%
+  list_rbind()
+
+all_sites_cor_clean <- all_sites_cor %>%
+  distinct(cor_value, .keep_all = TRUE)%>%
+  filter(!is.na(cor_value) & x != y)%>%
+  mutate(cor_correct = abs(as.double(cor_value)), 
+         cor_value = format(cor_value, scientific = FALSE))%>%
+  filter(n >100)
+
+```
+
+## Pariwise Plots
+
+```{r}
+
+norm_df <- long_df%>%
+  filter(site_code %in% all_res_system)%>%
+  dplyr::select(Parameter, Measurement, FCW_Number)%>%
+  pivot_wider(names_from = Parameter,
+              values_from = Measurement)%>%
+  dplyr::select(-c(FCW_Number, Fe, Mn, P, Al, pH, ANC, Mg, TSS, SC))
+
+pairs(norm_df)
+
+
+  ggplot(norm_df, aes(x = NH4, y = DOC))+
+    geom_point()+
+    geom_smooth()+
+    theme_bw(base_size = 15)
+
+
+chla_site_pairs <- long_df%>%
+  filter(site_code %in% c("JOER", "JOEI", "CBRI","CBRR","CHD"))%>%
+  pivot_wider(names_from = Parameter,
+              values_from = Measurement)%>%
+  filter(!is.na(ChlA))%>%
+  filter(Date != "2022-06-01")%>%
+  dplyr::select(Date, ChlA, site_code)%>%
+  pivot_wider(names_from = site_code, 
+              values_from = ChlA)
+
+
+
+pairs(chla_site_pairs)
+
+
+  ggplot(chla_site_pairs, aes(x = BRNR, y = CBRR))+
+    geom_point()+
+    geom_smooth(method = "lm")+
+    theme_bw(base_size = 15)
+
+
+
+
+for(i in 1:length(chla_site_pairs)){
+  
+  cor_by_param <- cor(subset_df$x, subset_df$y)
+  
+  cor_indv <- tibble(
+      x = parameter1, 
+      y = parameter2, 
+      cor_value = cor_by_param
+    )
+  cor_results <- rbind(cor_indv, cor_results)
+  
+}
+
 
 ```
 

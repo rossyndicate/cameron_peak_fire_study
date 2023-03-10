@@ -16,6 +16,8 @@ library(tidyverse)
 library(lubridate)
 library(ggplot2)
 library(plotly)
+library(caTools)
+source("flow/first_pass.R")
 ```
 
 ## *Correcting Functions*
@@ -81,7 +83,7 @@ source("flow/driftR_functions/sondeRaw.R")
 
 ```{r import_sensor_manual}
 # location of raw data files
-folder_path <- paste0(getwd(),"/data/all_sites_caprod_data")
+folder_path <- paste0(getwd(),"/data/flow/all_sites_caprod_data")
 
 # combine all sites into one data frame:
 stage_df <- read_csv(list.files(folder_path, 
@@ -103,7 +105,7 @@ stage_df <- read_csv(list.files(folder_path,
   
 ##  FIELD STAGE MEASUREMENTS. SEE RULES FOR COLUMNS NAMES ##
 # change "field stage" to wherever manual values are stored:
-field_stage <- "data/manual_values_dec_2022.csv"
+field_stage <- "data/flow_rmrs/manual_values_dec_2022.csv"
 
 manual_measurements <- read.csv(field_stage) %>%
   mutate(first_measurement_DT = as.POSIXct(first_measurement_DT, 
@@ -125,26 +127,26 @@ Eventually, this workflow many be modified to read in raw data so that the workf
 
 #could probably functionalize this, Megan!
 
-aspen <- read_csv("data/flow_kampf/aspen_stage_composite.csv")%>%
+aspen <- read_csv("data/flow/flow_kampf/aspen_stage_composite.csv")%>%
   mutate(DT = datetime, 
          water_height_cm = Stage_mm /10, 
          site_code = "aspen")%>%
   dplyr::select(site_code, DT, water_height_cm)
 
-greyrock <- read_csv("data/flow_kampf/greyrock_stage_composite.csv")%>%
+greyrock <- read_csv("data/flow/flow_kampf/greyrock_stage_composite.csv")%>%
   mutate(DT = datetime, 
          water_height_cm = Stage_mm /10, 
          site_code = "greyrock")%>%
   dplyr::select(site_code, DT, water_height_cm)
 
-bl4 <- read_csv("data/flow_kampf/bl4_stage_composite.csv")%>%
+bl4 <- read_csv("data/flow/flow_kampf/bl4_stage_composite.csv")%>%
   mutate(DT = datetime, 
          water_height_cm = Stage_mm /10, 
          site_code = "bl4")%>%
   dplyr::select(site_code, DT, water_height_cm)
 
 
-stage_df <- rbind(aspen, greyrock, bl4)%>%
+stage_df <- bind_rows(aspen, greyrock, bl4)%>%
   mutate(DT = as.POSIXct(DT, format = "%m/%d/%Y %H:%M"))
 
 source("flow/kampf_caprod_format.R")
@@ -178,14 +180,14 @@ ggplotly(indv_visual)
 ## *Export uncleaned stage across all sites*
 
 ```{r compiled_export}
-write_csv(stage_df, "data/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
+write_csv(stage_df, "data/flow/flow_rmrs/Provisional_Q_stage_data/stage_combined_UNCLEAN.csv")
 ```
 
 ### Kampf Version
 
 ```{r kampf_compiled_export}
 
-write_csv(stage_df, "data/flow_kampf/stage_combined_UNCLEAN.csv")
+write_csv(stage_df, "data/flow/flow_kampf/stage_combined_UNCLEAN.csv")
 ```
 
 # *Field data adjustments*
@@ -196,6 +198,44 @@ write_csv(stage_df, "data/flow_kampf/stage_combined_UNCLEAN.csv")
 2.  *Step sensor reading up or down based on the difference between first field measurement and the sensor value.*
 3.  *Create a new column, time factor, for each subset of data which allows the `driftR` package to correct for sensor drift.*
 4.  *Use `driftR` functions to match up the end of the data set with last field measurement.*
+
+## Testing Section:
+
+```{r}
+
+# subset stage_df to only include data from bl4
+bl4 <- stage_df %>%
+  filter(site_code == "bl4", DT < "2021-02-08 01:15:00")
+
+# create a column named last_four_measurements
+# this column will take a running average of the last 4 measurements
+# create a new column named site_visit_flag
+# if the difference between a measurement the last four.
+# if the difference is greater than the abosolute value of one 1 standard deviation, then site_visit_flag = TRUE
+# if the difference is less than the abosolute value of one 1 standard deviation, then site_visit_flag = FALSE
+# use a for loop to iterate through the data frame and create a new column called site_visit_flag
+
+bl4_cleaner <- first_pass(what = bl4,parama = "water_height_cm", max = 1000, min = -20)
+
+bl4_clean_nice <- bl4_cleaner%>%
+  mutate(flag_sd = ifelse(sd3_flag == 1, TRUE, FALSE))
+
+
+indv_visual <- bl4_clean_nice  %>%
+  ggplot(aes(x = DT)) +
+  geom_point(aes(y = p1, color = flag_sd))+
+  scale_color_manual(values = c( "TRUE"="cyan", "FALSE" = "black" ))+
+  geom_point(data = filter(manual_measurements, site_code == "bl4"),
+             aes(x = first_measurement_DT, 
+                y = first_measurement_cm),
+             color = "purple") +
+  theme_bw()
+   
+ggplotly(indv_visual)
+
+
+```
+
 
 ## *Functions to subset and adjust stage values*
 
