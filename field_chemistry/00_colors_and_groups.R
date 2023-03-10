@@ -44,6 +44,18 @@ genomic_sites <- c("LEGC", "TMBR", "TIMB", "ELC", "ARCH", "BOX1", "BOX2", "BOX3"
 
 # Isco rmrs cpf sites
 ISCO <- c("FISH_ISCO", "SAWM_ISCO", "BLAK_ISCO", "LBEA_ISCO", "FALL_ISCO")
+
+# Ratio Sites for spatial mapping
+ratio_sites_names_all <- c("JOEI_JOER", "JOER_CBRI" , "CBRI_CBRR" , "CBRR_CHD" , "CHD_JWC" , "BRNR_BMD" , "BMD_JWC" , "PTRR_PTRO" , 
+                       "PTRO_PJW" , "LNGR_LNGO" , "LNGO_PJW" , "JWC_SLEP" ,"PJW_SLEP" , "SLEP_PBR" , "PBR_PSF" , "COMI_COMR" , 
+                       "COMR_COMO" , "COMO_BEAV"  , "HORI_HORR" , "HORR_HORO" , "HORO_BEAV" , "BEAV_SFM", "SFM_PSF", "PSF_PNF" , "PNF_PBD" )
+# Ratio upper canyon Sites for spatial mapping
+ratio_sites_names_upper <- c("JOEI_JOER", "JOER_CBRI" , "CBRI_CBRR" , "CBRR_CHD" , "CHD_JWC" , "BRNR_BMD" , "BMD_JWC" , "PTRR_PTRO" , 
+                           "PTRO_PJW" , "LNGR_LNGO" , "LNGO_PJW" , "JWC_SLEP" ,"PJW_SLEP"  )
+
+ratio_sites_names_SF <- c("PBR_PSF" , "COMI_COMR" , "COMR_COMO" , "COMO_BEAV" ,
+                         "HORI_HORR" , "HORR_HORO" , "HORO_BEAV" , "BEAV_SFM", "SFM_PSF")
+
 ## Color sets
 cbbPalette <- c( "#999999","#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
