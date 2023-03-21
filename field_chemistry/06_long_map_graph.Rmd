@@ -323,7 +323,7 @@ ggmap(AOI_1)
 get_map()
 
 
-AIzaSyA0OuqJX1-vDClQ7I-C0Wh5lwV5UP4SIMI
+
 
 
 ```
