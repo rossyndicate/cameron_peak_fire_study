@@ -52,6 +52,12 @@ ratio_sites_names_all <- c("JOEI_JOER", "JOER_CBRI" , "CBRI_CBRR" , "CBRR_CHD" ,
 # Ratio upper canyon Sites for spatial mapping
 ratio_sites_names_upper <- c("JOEI_JOER", "JOER_CBRI" , "CBRI_CBRR" , "CBRR_CHD" , "CHD_JWC" , "BRNR_BMD" , "BMD_JWC" , "PTRR_PTRO" , 
                            "PTRO_PJW" , "LNGR_LNGO" , "LNGO_PJW" , "JWC_SLEP" ,"PJW_SLEP"  )
+# for upper select graph
+
+ratio_sites_names_upper_select <- c("JOEI_JOER", "JOER_CBRI" , "CBRI_CBRR" , "CBRR_CHD" , "CHD_JWC" , "BRNR_BMD" , "BMD_JWC"  , 
+                                      "JWC_SLEP" ,"PJW_SLEP"  )
+
+sites_names_upper_select <- c("JOEI", "JOER", "CBRI", "CBRR", "CHD", "BRNR", "BMD", "JWC", "PJW", "SLEP")
 
 ratio_sites_names_SF <- c("PBR_PSF" , "COMI_COMR" , "COMR_COMO" , "COMO_BEAV" ,
                          "HORI_HORR" , "HORR_HORO" , "HORO_BEAV" , "BEAV_SFM", "SFM_PSF")
