@@ -6,7 +6,7 @@ editor: visual
 self-contained: true
 ---
 
-## Goals
+# Goals
 
 This document is to work on graphs related to nutrients from Reservoirs/ mainstem
 
@@ -23,94 +23,16 @@ reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem
   mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")))
 
 
-
-```
-
-## Data frame creation
-
-```{r}
-
-
-res_2021 <- filter(reservoir_chemistry, site_code %in% jw_chambers_complex & Year == 2021)
-
-# filter reservoir chemistry for 2022
-# only use sites from all_res_system and mainstem_sites
-
-all_system_2022 <- filter(reservoir_chemistry, site_code %in% c(all_res_system, mainstem_sites, "BEAV") & 
-                            Year == 2022)
+library(basemapR)
 
 
 ```
 
-## Functionalize pivoting for var
+### Get lines and points
 
 ```{r}
 
-nutrient = "ChlA"
-
-get_ratios_2022 <- function(nutrient){
-}
-  
-  nr <- all_system_2022%>%
-    dplyr::select(date = Date,
-         site_code,
-         all_of(nutrient))%>%
-  pivot_wider(names_from = site_code, values_from = nutrient)%>%
-    filter(date %nin% genomic_dates)
-  ## Remove rows were all columns other than Date are NA
- nr_no_na_rows <- nr[rowSums(is.na(nr)) != (ncol(nr)-1), ]%>%
-   thicken(interval = "week", 
-           start_val = as.Date("2022-05-30"))
-# remove the date column and consolidate the rows by date_week
-  nr_concise <- nr_no_na_rows%>%
-    select(-date)%>%
-    pivot_longer(cols = c(-date_week), 
-                 names_to = "site",
-                 values_to = "value")%>%
-    drop_na()%>%
-  pivot_wider(names_from = site, values_from = value)
-  
-
-    
-  nr_final_df <- nr_concise%>%
-    mutate(JOEI_JOER  = (JOEI/JOER)*100, 
-           JOER_CBRI = (JOER/CBRI)*100, 
-           CBRI_CBRR = (CBRI/CBRR)*100, 
-           CBRR_CHD = (CBRR/CHD)*100, 
-           CHD_JWC = (CHD/JWC)*100, 
-           BRNR_BMD = (BRNR/BMD)*100, 
-           BMD_JWC = (BMD/JWC)*100, 
-           PTRR_PTRO = (PTRR/PTRO)*100, 
-           PTRO_PJW = (PTRO/PJW)*100, 
-           LNGR_LNGO = (LNGR/LNGO)*100, 
-           LNGO_PJW = (LNGO/PJW)*100, 
-           JWC_SLEP = (JWC/SLEP)*100,
-           PJW_SLEP = (PJW/SLEP)*100, 
-           SLEP_PBR = (SLEP/PBR)*100, 
-           PBR_PSF = (PBR/PSF)*100, 
-           COMI_COMR = (COMI/COMR)*100, 
-           COMR_COMO = (COMR/COMO)*100, 
-           COMO_BEAV =  (COMO/BEAV)*100 , 
-           HORI_HORR = (HORI/HORR)*100, 
-           HORR_HORO = (HORR/HORO)*100, 
-           HORO_BEAV = (HORO/BEAV)*100, 
-           BEAV_SFM = (BEAV/SFM)*100, 
-           SFM_PSF = (SFM/PSF)*100, 
-           PSF_PNF = (PSF/PNF)*100, 
-           PNF_PBD = (PNF/PBD)*100
-           )%>%
-    pivot_longer(., cols = -date_week, names_to = "site_code", values_to = nutrient)
-  
-
-
-```
-### Set up spatial data
-
-```{r}
-
-  up_and_down_sites <- nr_final_df %>%
-  distinct(site_code) %>%
-  filter(site_code %nin% c(all_res_system, mainstem_sites, "BEAV")) %>%
+  up_and_down_sites <- tibble(site_code = ratio_sites_names_all)%>%
   mutate(site_one= str_extract(site_code, "^[A-Z]+"),
          site_two = str_extract(site_code, "[A-Z]+$"),
          site_ratio = site_code) %>%
@@ -137,54 +59,279 @@ site_points <- Sites%>%
   st_as_sf(coords = c("Long", "Lat"), crs = 4326)
 ```
 
+### Get lines as flowlines
 
-### Join ratio and spatial
+```{r}
+
+# get flowlines
+clp  <- get_huc(id = '10190007', type = "huc08")
+clp_flowlines <- get_nhdplus(AOI = clp, 
+                             realization='flowline')
+
+
+
+
+
+ratio_flowlines<- st_read("data/spatial/ratio_flowlines_widest.kml")%>%
+  st_transform(crs = 4326)%>%
+  select(site_code = Name)%>%
+  st_cast("LINESTRING")
+
+mapview::mapviewOptions(fgb = FALSE)
+
+mapview::mapview(ratio_flowlines)+
+  mapview::mapview(site_points)
+
+```
+
+
+
+## Data frame creation
+
+Create dataframe for ratio mapping and
+
 ```{r}
 
 
-nutrient_ratios_lines <- nr_final_df %>%
-  inner_join(site_lines, by = "site_code")%>%
+res_2021 <- filter(reservoir_chemistry, site_code %in% jw_chambers_complex & Year == 2021)
+
+# filter reservoir chemistry for 2022
+# only use sites from all_res_system and mainstem_sites
+
+all_system_2022 <- filter(reservoir_chemistry, site_code %in% c(all_res_system, mainstem_sites, "BEAV") & Year == 2022)
+
+
+```
+
+# Ratio Map
+
+## Function to get ratios
+
+This section organizes the data by site and calculates ratios between upstream and downstream sites.
+
+```{r}
+
+
+
+get_ratios_2022 <- function(nutrient){
+
+  
+  nr <- all_system_2022%>%
+    dplyr::select(date = Date,
+         site_code,
+         all_of(nutrient))%>%
+  pivot_wider(names_from = site_code, values_from = nutrient)%>%
+    filter(date %nin% genomic_dates)
+  ## Remove rows were all columns other than Date are NA
+ nr_no_na_rows <- nr[rowSums(is.na(nr)) != (ncol(nr)-1), ]%>%
+   thicken(interval = "week", 
+           start_val = as.Date("2022-05-30"))
+# remove the date column and consolidate the rows by date_week
+  nr_concise <- nr_no_na_rows%>%
+    select(-date)%>%
+    pivot_longer(cols = c(-date_week), 
+                 names_to = "site",
+                 values_to = "value")%>%
+    drop_na()%>%
+  pivot_wider(names_from = site, values_from = value)
+  
+
+    
+  nr_final_df <- nr_concise%>%
+    mutate(JOEI_JOER  = (JOER/JOEI), 
+           JOER_CBRI = (CBRI/JOER), 
+           CBRI_CBRR = (CBRR/CBRI), 
+           CBRR_CHD = (CHD/CBRR), 
+           CHD_JWC = (JWC/CHD), 
+           BRNR_BMD = (BMD/BRNR), 
+           BMD_JWC = (JWC/BMD), 
+           PTRR_PTRO = (PTRO/PTRR), 
+           PTRO_PJW = (PJW/PTRO), 
+           LNGR_LNGO = (LNGO/LNGR), 
+           LNGO_PJW = (PJW/LNGO), 
+           JWC_SLEP = (SLEP/JWC),
+           PJW_SLEP = (SLEP/PJW), 
+           SLEP_PBR = (PBR/SLEP), 
+           PBR_PSF = (PSF/PBR), 
+           COMI_COMR = (COMR/COMI), 
+           COMR_COMO = (COMO/COMR), 
+           COMO_BEAV =  (BEAV/COMO) , 
+           HORI_HORR = (HORR/HORI), 
+           HORR_HORO = (HORO/HORR), 
+           HORO_BEAV = (BEAV/HORO), 
+           BEAV_SFM = (SFM/BEAV), 
+           SFM_PSF = (PSF/SFM), 
+           PSF_PNF = (PNF/PSF), 
+           PNF_PBD = (PBD/PNF)
+           )%>%
+    pivot_longer(., cols = -date_week, names_to = "site_code", values_to = nutrient)
+  
+ return(nr_final_df)
+   
+}
+
+```
+
+## Join ratio and spatial
+
+Functions make the point and ratio data spatial to be used for mapping
+
+```{r}
+
+
+
+make_line_ratio_spatial_flowlines <- function(nr_final_df, nutrient){
+  
+  nutrient_ratios_lines <- nr_final_df %>%
+  inner_join(ratio_flowlines, by = "site_code")%>%
   st_sf()%>%
-  dplyr::rename(percent_change = ChlA )
+  dplyr::rename(ratio = nutrient )
 
 
+return(nutrient_ratios_lines)
+  
+}
 
-
-nutrient_ratios_points <- nr_final_df %>%
+make_point_ratio_spatial <- function(nr_final_df){
+  
+  nutrient_ratios_points <- nr_final_df %>%
   inner_join(site_points, by = "site_code")%>%
   st_sf()
 
 
+return(nutrient_ratios_points)
+  
+}
+
+
+
 
 ```
 
-
-## Plot
+### layout 
 
 ```{r}
 
-tester <- tm_shape(nutrient_ratios_points, name = "Sampling Locations")+
-  tm_bubbles(size = "ChlA")+
-  tm_shape(nutrient_ratios_lines, name = "Sampling Locations")+
-  tm_lines(size = "percent_change")+
-  tm_facets(along = "date_week", free.coords = FALSE, free.scales.symbol.size = FALSE,
-            nrow = 1, ncol = 1)
-
-
-
-
-tester
-tester_lines
-tmap_animation(tester, filename = "output/spatial/chla_tester_points.gif", width = 1200, height = 600, delay = 15)
-tmap_animation(tester_lines, filename = "output/spatial/chla_tester_lines.gif", width = 1200, height = 600, delay = 15)
+my_layout <- function() {
+  tm_layout(
+    bg.color = "white",
+    legend.position = c("right", "bottom"),
+    legend.title.size = 1,
+    legend.text.size = 0.8,
+    legend.frame = FALSE,
+    legend.outside = TRUE,
+    title.position = c("left", "top"),
+    title.size = 1,
+    title.margin = c(0, 0, 0, 20),
+    title.adjust = 0.5,
+    title.just = "left",
+    title.text = text(paste("Week of 2022-05-30"), 
+                      col = "black", cex = 1.2, fontface = "bold"))
+}
 
 ```
 
 
+## Plotting/ animation functions
+
+This will create a plot for specific date_weeks in the data or animations for an entire year.
+
+```{r}
+
+chla_nr_df <- get_ratios_2022(nutrient = "ChlA")
+
+nutrient_ratios_lines <- make_line_ratio_spatial_flowlines(nr_final_df = chla_nr_df, nutrient = "ChlA")%>%
+# if percent_change is greater than 20, set to 20
+  mutate(ratio = ifelse(ratio > 20, 20, ratio))
 
 
+nutrient_ratios_points <- make_point_ratio_spatial(chla_nr_df)
+test<- filter(nutrient_ratios_lines, site_code %in% ratio_sites_names_upper_select)%>%
+  drop_na()
 
-## Functionalize 2021 JOER/CBRR dataset
+length(unique(test$date_week))
+
+  #tm_shape(filter(nutrient_ratios_points, date_week == "2022-08-08"& site_code %in% c(mainstem_res_set, "JWC", "PJW", "SLEP")), name = "Sampling Locations")+
+ select_upper_plot <- tm_shape(filter(nutrient_ratios_lines, site_code %in% ratio_sites_names_upper_select & date_week == "2022-06-06"), name = "Flow Lines")+
+  tm_lines(col = "ratio", palette = "Greens", n = 5, contrast = c(0.5, 0.9),
+           breaks = c(0, .5, 1, 2, 5, 10, 20),
+           lwd = 2.5)+
+   # tm_facets(as.layers = TRUE, free.coords = FALSE, free.scales.symbol.size = FALSE,
+   #          nrow = 1, ncol = 1 )+
+   tm_shape(filter(nutrient_ratios_points, site_code %in% sites_names_upper_select & date_week == "2022-06-06"), name = "Sampling Locations")+
+  tm_bubbles(size = "ChlA", breaks = c(0, .5, 1, 2, 5, 10, 20))
+    # tm_facets(as.layers = TRUE, free.coords = FALSE, free.scales.symbol.size = FALSE,
+    #         nrow = 1, ncol = 1)+
+  # add title in top left corner which is date_week
+
+
+ #+tm_facets(along = "date_week", free.coords = FALSE, free.scales.symbol.size = FALSE,
+            #nrow = 1, ncol = 1)
+ select_upper_plot
+
+tmap_leaflet( select_upper_plot , mode = "view")%>%
+  addProviderTiles("Esri.WorldTopoMap") 
+
+
+tmap_animation(tester, filename = "output/spatial/chla_tester_upper.gif", width = 1400, height = 800, delay = 15)
+tmap_animation(tester_lines, filename = "output/spatial/chla_tester_lines.gif", width = 1200, height = 600, delay = 15)
+
+
+#Functionalize! tbd later
+
+avail_weeks <- unique(nutrient_ratios_points$date_week)
+
+plot_ratios_one_week <- function(week, point_df, line_df, nutrient){
+  return(map_plot)
+}
+
+season_animation<- function(point_df, line_df, nutrient){
+  return(map_animation)
+}
+```
+
+## Using ratio functions for plotting
+
+```{r}
+library(ggmap)
+library(gganimate)
+
+
+AOI_1 <- get_map(location = c(lon = 	-105.8364 , lat = 40.60038 ), zoom = 12,  maptype = "hybrid")
+
+frames <- length(unique(filter(nutrient_ratios_lines, site_code %in% ratio_sites_names_upper_select)$date_week))-1
+
+select_upper <- ggmap(AOI_1)+
+  coord_sf(crs = st_crs(3857))+
+  geom_sf(data = filter(nutrient_ratios_lines, site_code %in% ratio_sites_names_upper_select), aes(color = ratio, group = date_week), size = 1.5, inherit.aes = FALSE)+
+  # set the color palette to be "Greens" and have breaks at 0, 0.5, 1, 2, 5, 10, 20
+  scale_color_gradientn(colours = c("white", "red"), breaks = c(0, .5, 1, 2, 5, 10, 20))+
+   geom_sf(data = filter(nutrient_ratios_points, site_code %in% sites_names_upper_select), aes(size = ChlA, group = date_week), alpha = .5, inherit.aes = FALSE)+
+  coord_sf(crs = st_crs(4326))+
+  transition_manual(date_week)+
+ ggtitle('Year: {frame_time}',
+           subtitle = 'Frame {frame} of {nframes}') +
+  shadow_mark()
+  
+
+animation <- animate(select_upper, nframes = frames, fps = 2 )
+
+
+ggmap(AOI_1)
+?geom_sf()
+
+get_map()
+
+
+AIzaSyA0OuqJX1-vDClQ7I-C0Wh5lwV5UP4SIMI
+
+
+```
+
+
+# 2021 JW and Chamber's longitudinal data
+
+## Functionalize plotting of means and SDs
 
 ```{r}
 
@@ -205,7 +352,7 @@ plot_long_jw_ch <- function(param, year = 2021,  title = FALSE){
   
 # create a mean_2021 dataframe that has the mean of JOEI, JOER, CBRI, CBRR and CHD
 #pivot longer and name the columns "site" and "value"
-  mean_2021 <- ratio_for_param%>%
+  lean_mean_machine <- ratio_for_param%>%
     pivot_longer(cols = c("JOEI", "JOER", "CBRI", "CBRR", "CHD"),
                  names_to = "site",
                  values_to = "value")%>%
@@ -218,15 +365,15 @@ plot_long_jw_ch <- function(param, year = 2021,  title = FALSE){
            mean_minus_sd = mean - sd, 
            type = "mean")
   
-  no_ratios_2021 <- ratio_for_param%>%
+  no_ratios <- ratio_for_param%>%
     pivot_longer(cols = c("JOEI", "JOER", "CBRI", "CBRR", "CHD"),
                  names_to = "site",
                  values_to = "value")%>%
      mutate(site = factor(site, levels = c("JOEI", "JOER", "CBRI", "CBRR", "CHD")))
 
  if(title == TRUE){
- plot <- ggplot(mean_2021, aes(x = site))+
-   geom_point(data = no_ratios_2021, aes(y = value, color = site), alpha  = .6)+
+ plot <- ggplot(lean_mean_machine, aes(x = site))+
+   geom_point(data = no_ratios, aes(y = value, color = site), alpha  = .6)+
    geom_ribbon(aes(ymin = mean_minus_sd, ymax = mean_plus_sd, 
                   group = type), alpha = 0.2)+
    geom_point(aes(y = mean))+
@@ -236,13 +383,13 @@ plot_long_jw_ch <- function(param, year = 2021,  title = FALSE){
    labs(x = "Site (Upstream to Downstream)", 
         y = param)+
    #add the year in the top left quadrant of the plot
-    annotate("text", x = 1, y = 1.5, label = year, size = 10)+
+    #annotate("text", x = 1, y = 1.5, label = year, size = 10)+
     theme(legend.position = "none")
 }
   
   if(title == FALSE){
- plot <- ggplot(mean_2021, aes(x = site))+
-   geom_point(data = no_ratios_2021, aes(y = value, color = site), alpha  = .6)+
+ plot <- ggplot(lean_mean_machine, aes(x = site))+
+   geom_point(data = no_ratios, aes(y = value, color = site), alpha  = .6)+
    geom_ribbon(aes(ymin = mean_minus_sd, ymax = mean_plus_sd, 
                   group = type), alpha = 0.2)+
    geom_point(aes(y = mean))+
@@ -284,16 +431,13 @@ ggarrange(no3, nh4, doc, dtn, ph, so4, k, chlA, ncol = 2, nrow = 4)
 
 
 
-no3_2021 <- plot_long_jw_ch(param = "NO3", year = 2021)
+no3_2021 <- plot_long_jw_ch(param = "NO3", year = 2021)+
+            ylim(-.1,2)
 no3_2022 <- plot_long_jw_ch(param = "NO3", year = 2022, title = TRUE)
-chla_2021 <- plot_long_jw_ch(param = "ChlA", year = 2021)
+chla_2021 <- plot_long_jw_ch(param = "ChlA", year = 2021)+
+            ylim(-.25, 10)
 chla_2022 <- plot_long_jw_ch(param = "ChlA", year = 2022, title = TRUE)
 
 ggarrange(chla_2021, no3_2021, chla_2022, no3_2022, ncol = 2, nrow = 2)
 ggsave("output/chla_no3_JW_CH_facet_mean_sd.jpg", width = 24, height = 16, dpi = 300)
 ```
-
-
-
-
-
