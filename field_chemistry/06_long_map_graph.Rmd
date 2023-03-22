@@ -214,7 +214,8 @@ This section organizes the data by site and calculates ratios between upstream a
 get_ratios_2022 <- function(nutrient){
 
   
-  nr <- all_system_2022%>%
+  nr <- filter(reservoir_chemistry, site_code %in% c(all_res_system, mainstem_sites, "BEAV") & Year == 2022)
+
     dplyr::select(date = Date,
          site_code,
          all_of(nutrient))%>%
