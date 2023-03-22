@@ -373,15 +373,19 @@ tmap_animation(tester_lines, filename = "output/spatial/chla_tester_lines.gif", 
 ```
 
 
-## Using ratio functions for plotting
+## ggmap and gganimate 
+
+Need to improve AOI location, basemap appearance and colors for data display. 
 
 ```{r}
+
 library(ggmap)
 library(gganimate)
 
-
+# need to make bounding box better
 AOI_1 <- get_map(location = c(lon = 	-105.8364 , lat = 40.60038 ), zoom = 12,  maptype = "hybrid")
 
+# essentially date_week - 1
 frames <- length(unique(filter(nutrient_ratios_lines, site_code %in% ratio_sites_names_upper_select)$date_week))-1
 
 select_upper <- ggmap(AOI_1)+
@@ -398,15 +402,6 @@ select_upper <- ggmap(AOI_1)+
   
 
 animation <- animate(select_upper, nframes = frames, fps = 2 )
-
-
-ggmap(AOI_1)
-?geom_sf()
-
-get_map()
-
-
-
 
 
 ```
