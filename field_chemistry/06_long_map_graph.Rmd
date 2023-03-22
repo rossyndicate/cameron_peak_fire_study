@@ -303,46 +303,37 @@ return(nutrient_ratios_points)
   
 }
 
-
-
-
 ```
 
-### layout 
-
-```{r}
-
-my_layout <- function() {
-  tm_layout(
-    bg.color = "white",
-    legend.position = c("right", "bottom"),
-    legend.title.size = 1,
-    legend.text.size = 0.8,
-    legend.frame = FALSE,
-    legend.outside = TRUE,
-    title.position = c("left", "top"),
-    title.size = 1,
-    title.margin = c(0, 0, 0, 20),
-    title.adjust = 0.5,
-    title.just = "left",
-    title.text = text(paste("Week of 2022-05-30"), 
-                      col = "black", cex = 1.2, fontface = "bold"))
-}
-
-```
 
 
 ## Plotting/ animation functions
 
-This will create a plot for specific date_weeks in the data or animations for an entire year.
-
+### Create Datasets for plotting
+ 
+ Uses the following functions:
+ - get_ratios_2022: acquire data in correct format for specific nutrient
+ - make_point_ratio_spatial: Create point dataset for nutrient
+ - make_line_ratio_spatial_flowlines: Create line dataset for specific nutrient
+ 
 ```{r}
 
 chla_nr_df <- get_ratios_2022(nutrient = "ChlA")
 
 nutrient_ratios_lines <- make_line_ratio_spatial_flowlines(nr_final_df = chla_nr_df, nutrient = "ChlA")%>%
-# if percent_change is greater than 20, set to 20
-  mutate(ratio = ifelse(ratio > 20, 20, ratio))
+# if percent_change is greater than 10, set to 10
+  mutate(ratio = ifelse(ratio > 10, 10, ratio), 
+         date = as.Date(date_week))
+
+
+nutrient_ratios_points <- make_point_ratio_spatial(chla_nr_df)%>%
+  mutate(date = as.Date(date_week))
+
+```
+ 
+
+This will create a plot for specific date_weeks in the data or animations for an entire year.
+
 
 
 nutrient_ratios_points <- make_point_ratio_spatial(chla_nr_df)
