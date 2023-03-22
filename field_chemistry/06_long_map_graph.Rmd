@@ -369,18 +369,9 @@ tmap_animation(tester, filename = "output/spatial/chla_tester_upper.gif", width 
 tmap_animation(tester_lines, filename = "output/spatial/chla_tester_lines.gif", width = 1200, height = 600, delay = 15)
 
 
-#Functionalize! tbd later
 
-avail_weeks <- unique(nutrient_ratios_points$date_week)
-
-plot_ratios_one_week <- function(week, point_df, line_df, nutrient){
-  return(map_plot)
-}
-
-season_animation<- function(point_df, line_df, nutrient){
-  return(map_animation)
-}
 ```
+
 
 ## Using ratio functions for plotting
 
@@ -419,6 +410,49 @@ get_map()
 
 
 ```
+
+
+# Functionalize these later!
+
+
+```{r}
+
+# This will plot one week of discrete data with ratios between sites
+# using workflow designed in "Create Datasets for plotting" chunk
+discrete_one_week_plot <- function(week, point_df, line_df, nutrient){
+  return(map_plot)
+}
+
+# This will plot season's worth of discrete data with ratios between sites
+# using workflow designed in "Create Datasets for plotting" chunk
+discrete_season_animation<- function(point_df, line_df, nutrient){
+  return(map_animation)
+}
+
+
+# This will plot one timestep of continuous data with ratios between sites
+# using workflow similar to "Create Datasets for plotting" chunk but for continuous data
+continous_timestep_plot <- function(timestep, cont_point_df, cont_line_df, nutrient){
+  return(map_plot)
+}
+# This will plot one week of continuous data with ratios between sites
+# using workflow similar to "Create Datasets for plotting" chunk but for continuous data
+continous_one_week_animation <- function(week, cont_point_df, cont_line_df, nutrient){
+  return(map_plot)
+}
+
+# This will plot a season's worth of continuous data with ratios between sites
+# using workflow similar to "Create Datasets for plotting" chunk but for continuous data
+continous_season_animation<- function(year, cont_point_df, cont_line_df, nutrient){
+  return(map_animation)
+}
+
+
+```
+
+
+
+
 
 
 # 2021 JW and Chamber's longitudinal data
