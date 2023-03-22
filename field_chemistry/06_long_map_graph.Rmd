@@ -335,17 +335,18 @@ nutrient_ratios_points <- make_point_ratio_spatial(chla_nr_df)%>%
 This will create a plot for specific date_weeks in the data or animations for an entire year.
 
 
+## Animation attempts
 
-nutrient_ratios_points <- make_point_ratio_spatial(chla_nr_df)
-test<- filter(nutrient_ratios_lines, site_code %in% ratio_sites_names_upper_select)%>%
-  drop_na()
+### Tmap 
 
-length(unique(test$date_week))
+ I could get the animation to work without a basemap. I could get the basemap and one date_week in view mode but no animation. AGH
+ 
+```{r}
 
-  #tm_shape(filter(nutrient_ratios_points, date_week == "2022-08-08"& site_code %in% c(mainstem_res_set, "JWC", "PJW", "SLEP")), name = "Sampling Locations")+
+ #tm_shape(filter(nutrient_ratios_points, date_week == "2022-08-08"& site_code %in% c(mainstem_res_set, "JWC", "PJW", "SLEP")), name = "Sampling Locations")+
  select_upper_plot <- tm_shape(filter(nutrient_ratios_lines, site_code %in% ratio_sites_names_upper_select & date_week == "2022-06-06"), name = "Flow Lines")+
   tm_lines(col = "ratio", palette = "Greens", n = 5, contrast = c(0.5, 0.9),
-           breaks = c(0, .5, 1, 2, 5, 10, 20),
+           breaks = c(0, .5, 1, 2, 5, 10),
            lwd = 2.5)+
    # tm_facets(as.layers = TRUE, free.coords = FALSE, free.scales.symbol.size = FALSE,
    #          nrow = 1, ncol = 1 )+
