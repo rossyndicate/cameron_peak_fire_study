@@ -8,7 +8,8 @@ self-contained: true
 
 # Goals
 
-This document is to work on graphs related to nutrients from Reservoirs/ mainstem
+This document is to work on longitudinal plots and animations related to nutrients from Reservoirs / mainstem. 
+This work could be extended to plot continous data at the same sites or extend into the lower network of sensors. 
 
 ### Importing
 
