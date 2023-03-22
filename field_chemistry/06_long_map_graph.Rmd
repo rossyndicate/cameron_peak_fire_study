@@ -23,12 +23,11 @@ reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem
   mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")))
 
 
-library(basemapR)
-
-
 ```
 
 ### Get lines and points
+
+This gives you straight lines between points but keeps it in spatial form
 
 ```{r}
 
@@ -61,15 +60,15 @@ site_points <- Sites%>%
 
 ### Get lines as flowlines
 
+ I manually drew the flowlines for plots on google earth to reduce overlap between sites that feed into the same. 
+ We should develop a workflow to combine NHD flowlines between points and make those the lines that ratio data lives on. 
+
 ```{r}
 
 # get flowlines
 clp  <- get_huc(id = '10190007', type = "huc08")
 clp_flowlines <- get_nhdplus(AOI = clp, 
                              realization='flowline')
-
-
-
 
 
 ratio_flowlines<- st_read("data/spatial/ratio_flowlines_widest.kml")%>%
@@ -86,24 +85,123 @@ mapview::mapview(ratio_flowlines)+
 
 
 
-## Data frame creation
 
-Create dataframe for ratio mapping and
+# 2021 JW and Chamber's longitudinal data
+
+## Functionalize plotting of means and SDs
+
+This function creates a plots for a longitudinal view of the Joe Wright and Chamber's Complex. It calculates the ratio between sites (not plotted yet), mean and +- standard deviation. This function should work for any nutrient other than PO4 due to zero's in dataset. 
+
+Title vs non title is still work in progress
 
 ```{r}
 
 
-res_2021 <- filter(reservoir_chemistry, site_code %in% jw_chambers_complex & Year == 2021)
-
-# filter reservoir chemistry for 2022
-# only use sites from all_res_system and mainstem_sites
-
-all_system_2022 <- filter(reservoir_chemistry, site_code %in% c(all_res_system, mainstem_sites, "BEAV") & Year == 2022)
+plot_long_jw_ch <- function(param, year = 2021,  title = FALSE){
 
 
+  ratio_for_param <- filter(reservoir_chemistry, site_code %in% jw_chambers_complex & Year == year)%>%
+    dplyr::select(all_of(param), Date, site_code)%>%
+     pivot_wider(names_from = site_code, values_from = param)%>%
+    drop_na()%>%
+    mutate(JOEI_JOER = JOER/JOEI, 
+           JOER_CBRI = CBRI/JOER,
+           CBRI_CBRR = CBRR/CBRI,
+           CBRR_CHD = CHD/CBRR)
+  
+
+  
+# create a mean_2021 dataframe that has the mean of JOEI, JOER, CBRI, CBRR and CHD
+#pivot longer and name the columns "site" and "value"
+  lean_mean_machine <- ratio_for_param%>%
+    pivot_longer(cols = c("JOEI", "JOER", "CBRI", "CBRR", "CHD"),
+                 names_to = "site",
+                 values_to = "value")%>%
+    group_by(site)%>%
+    summarise(mean = mean(value), 
+              sd = sd(value))%>%
+    ungroup()%>%
+    mutate(site = factor(site, levels = c("JOEI", "JOER", "CBRI", "CBRR", "CHD")), 
+           mean_plus_sd = mean + sd, 
+           mean_minus_sd = mean - sd, 
+           type = "mean")
+  
+  no_ratios <- ratio_for_param%>%
+    pivot_longer(cols = c("JOEI", "JOER", "CBRI", "CBRR", "CHD"),
+                 names_to = "site",
+                 values_to = "value")%>%
+     mutate(site = factor(site, levels = c("JOEI", "JOER", "CBRI", "CBRR", "CHD")))
+
+ if(title == TRUE){
+ plot <- ggplot(lean_mean_machine, aes(x = site))+
+   geom_point(data = no_ratios, aes(y = value, color = site), alpha  = .6)+
+   geom_ribbon(aes(ymin = mean_minus_sd, ymax = mean_plus_sd, 
+                  group = type), alpha = 0.2)+
+   geom_point(aes(y = mean))+
+   geom_line(aes( y = mean, group = type))+
+   scale_color_manual(values = colorsBS_in_order)+
+   theme_few(base_size = 25) +
+   labs(x = "Site (Upstream to Downstream)", 
+        y = param)+
+   #add the year in the top left quadrant of the plot
+    #annotate("text", x = 1, y = 1.5, label = year, size = 10)+
+    theme(legend.position = "none")
+}
+  
+  if(title == FALSE){
+ plot <- ggplot(lean_mean_machine, aes(x = site))+
+   geom_point(data = no_ratios, aes(y = value, color = site), alpha  = .6)+
+   geom_ribbon(aes(ymin = mean_minus_sd, ymax = mean_plus_sd, 
+                  group = type), alpha = 0.2)+
+   geom_point(aes(y = mean))+
+   geom_line(aes( y = mean, group = type))+
+   scale_color_manual(values = colorsBS_in_order)+
+   theme_few(base_size = 25) +
+   labs(x = "Site (Upstream to Downstream)", 
+        y = param)+
+        
+        #remove x axis labels and title
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            axis.title.x = element_blank())+
+    theme(legend.position = "none")
+}
+ return(plot)
+}
 ```
 
-# Ratio Map
+## Param long 2021 JW CH plots
+
+```{r}
+
+
+# Plot 2021 and 2022 no3 and chl-a data for hydrodays figures
+
+
+no3_2021 <- plot_long_jw_ch(param = "NO3", year = 2021, title = TRUE)+
+  #make plot y axis line up with other plots
+            ylim(-.25,2)
+
+no3_2022 <- plot_long_jw_ch(param = "NO3", year = 2022, title = TRUE)+
+  #make plot y axis line up with other plots
+  ylim(-.25,2)
+
+chla_2021 <- plot_long_jw_ch(param = "ChlA", year = 2021)+
+  #make plot y axis line up with other plots
+            ylim(-.25, 10)
+
+chla_2022 <- plot_long_jw_ch(param = "ChlA", year = 2022)+
+  #make plot y axis line up with other plots
+        ylim(-.25, 10)
+
+
+ggarrange(chla_2021, chla_2022, no3_2021, no3_2022, ncol = 2, nrow = 2)
+#ggsave("output/chla_no3_JW_CH_facet_mean_sd.jpg", width = 24, height = 16, dpi = 300)
+```
+
+# 2022 Ratio Map
+
+This section will create animations and plots that show not only the site data but also it's relationship with down/upstream sites. This can be built out with continous data in mind and could live on a shiny app for funders/public to track changes in the watershed. 
 
 ## Function to get ratios
 
