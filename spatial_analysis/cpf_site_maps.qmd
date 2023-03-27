@@ -236,3 +236,23 @@ mapview::mapview(cdphe_2021, col.regions = "cyan")+
   mapview::mapview(CPF_sites, col.regions = "white", cex = "6")
 
 ```
+
+### CPRW again
+
+```{r}
+folder_path <-"~/Documents/fork_yeah/cameron_peak_fire_study/data/spatial"
+
+file_names <- tibble(file_name  = list.files(folder_path, 
+                                recursive = TRUE, 
+                                full.names = TRUE))%>%
+  filter(grepl(".shp",file_name)&!grepl("xml",file_name))%>%
+  pull()
+
+black_diamond  <- st_read("~/Documents/fork_yeah/cameron_peak_fire_study/data/spatial/BlackDiamond_Rx_Draft")
+cprw_citsci <- st_read("~/Documents/fork_yeah/cameron_peak_fire_study/data/spatial/CPRW_Sites 2")%>%
+  st_sf()
+
+mapview::mapviewOptions(fgb = FALSE)
+#mapview::mapview(black_diamond, col.regions = "red")+
+mapview::mapview(cprw_citsci, col.regions = "cyan")
+```
