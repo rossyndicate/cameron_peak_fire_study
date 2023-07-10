@@ -1,0 +1,137 @@
+---
+title: "2022 Photo Cleaner"
+author: "Sam Struthers"
+format: html
+editor: visual
+self-contained: true
+---
+```{r}
+library(tibble)
+library(tidyverse)
+```
+
+# Mainstem photos 2022
+```{r}
+
+
+#list all the files in each folder and create a vector of file names
+file_list <- list.files(path = "~/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem/2022/", full.names = TRUE, recursive = TRUE)
+
+path_final <- tibble()
+for (i in 1:length(file_list)) {
+
+old_path <- file_list[i]
+## Pattern of file name: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem/YYYY/MMDD/SITE/Descriptor.jpg" 
+## write code that a new file path for the one above that looks like this: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem_fixed/YYYYMMDD_SITE_Descriptor.jpg"
+ 
+file_parts <- strsplit(old_path, "/")[[1]]
+mainstem <- file_parts[9]
+yyyy <- file_parts[11]
+mmdd <- file_parts[13]
+site <- file_parts[14]
+descriptor <- file_parts[15]
+
+# Format the components to create the new file path
+new_path <- paste0("/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem_fixed/",
+                   site,"/",yyyy, mmdd, "_", "_", descriptor)
+
+paths <- tibble(new_path, old_path)
+path_final <- rbind(path_final, paths)
+file.rename(old_path, new_path)
+}
+rm(list = ls())
+```
+
+
+# Tributaries photos 2022
+```{r}
+
+
+#list all the files in each folder and create a vector of file names
+file_list <- list.files(path = "~/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Tributaries/", full.names = TRUE, recursive = TRUE)
+
+path_final <- tibble()
+for (i in 1:length(file_list)) {
+
+old_path <- file_list[i]
+## Pattern of file name: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem/YYYYMMDD/SITE/Descriptor.jpg" 
+## write code that a new file path for the one above that looks like this: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem_fixed/YYYYMMDD_SITE_Descriptor.jpg"
+ 
+file_parts <- strsplit(old_path, "/")[[1]]
+yyyymmdd <- file_parts[12]
+site <- file_parts[13]
+descriptor <- file_parts[14]
+
+# Format the components to create the new file path
+new_path <- paste0("/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/tribs_fixed/",
+                   site,"/",yyyymmdd, "_", "_", descriptor)
+
+paths <- tibble(new_path, old_path)
+path_final <- rbind(path_final, paths)
+file.rename(old_path, new_path)
+}
+
+rm(list = ls())
+```
+
+# SF Res photos 2022
+```{r}
+
+
+#list all the files in each folder and create a vector of file names
+file_list <- list.files(path = "~/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/south_fork_reservoirs/", full.names = TRUE, recursive = TRUE)
+
+path_final <- tibble()
+for (i in 1:length(file_list)) {
+
+old_path <- file_list[i]
+## Pattern of file name: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem/YYYYMMDD/SITE/Descriptor.jpg" 
+## write code that a new file path for the one above that looks like this: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem_fixed/YYYYMMDD_SITE_Descriptor.jpg"
+ 
+file_parts <- strsplit(old_path, "/")[[1]]
+yyyymmdd <- file_parts[12]
+site <- file_parts[13]
+descriptor <- file_parts[14]
+
+# Format the components to create the new file path
+new_path <- paste0("/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/south_fork_fixed/",
+                   site,"/2022",yyyymmdd, "_", "_", descriptor)
+
+paths <- tibble(new_path, old_path)
+path_final <- rbind(path_final, paths)
+file.rename(old_path, new_path)
+}
+
+rm(list = ls())
+```
+
+# Reservoir photos 2022
+```{r}
+
+
+#list all the files in each folder and create a vector of file names
+file_list <- list.files(path = "~/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Reservoirs/", full.names = TRUE, recursive = TRUE)
+
+path_final <- tibble()
+for (i in 1:length(file_list)) {
+
+old_path <- file_list[i]
+## Pattern of file name: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem/YYYYMMDD/SITE/Descriptor.jpg" 
+## write code that a new file path for the one above that looks like this: "/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/Mainstem_fixed/YYYYMMDD_SITE_Descriptor.jpg"
+ 
+file_parts <- strsplit(old_path, "/")[[1]]
+yyyymmdd <- file_parts[12]
+site <- file_parts[13]
+descriptor <- file_parts[14]
+
+# Format the components to create the new file path
+new_path <- paste0("/Users/samstruthers/Documents/fork_yeah/cameron_peak_fire_study/data/CPF_Site_Photos/2O22/reservoirs_fixed/",
+                   site,"/2022",yyyymmdd, "_", "_", descriptor)
+
+paths <- tibble(new_path, old_path)
+path_final <- rbind(path_final, paths)
+file.rename(old_path, new_path)
+}
+
+rm(list = ls())
+```
