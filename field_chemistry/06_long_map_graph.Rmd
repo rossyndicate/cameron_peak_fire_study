@@ -8,8 +8,7 @@ self-contained: true
 
 # Goals
 
-This document is to work on longitudinal plots and animations related to nutrients from Reservoirs / mainstem. 
-This work could be extended to plot continous data at the same sites or extend into the lower network of sensors. 
+This document is to work on longitudinal plots and animations related to nutrients from Reservoirs / mainstem. This work could be extended to plot continous data at the same sites or extend into the lower network of sensors.\
 
 ### Importing
 
@@ -61,8 +60,7 @@ site_points <- Sites%>%
 
 ### Get lines as flowlines
 
- I manually drew the flowlines for plots on google earth to reduce overlap between sites that feed into the same. 
- We should develop a workflow to combine NHD flowlines between points and make those the lines that ratio data lives on. 
+I manually drew the flowlines for plots on google earth to reduce overlap between sites that feed into the same. We should develop a workflow to combine NHD flowlines between points and make those the lines that ratio data lives on.
 
 ```{r}
 
@@ -84,14 +82,11 @@ mapview::mapview(ratio_flowlines)+
 
 ```
 
-
-
-
 # JW and Chamber's longitudinal data
 
 ## Functionalize plotting of means and SDs
 
-This function creates a plots for a longitudinal view of the Joe Wright and Chamber's Complex. It calculates the ratio between sites (not plotted yet), mean and +- standard deviation. This function should work for any nutrient other than PO4 due to zero's in dataset. 
+This function creates a plots for a longitudinal view of the Joe Wright and Chamber's Complex. It calculates the ratio between sites (not plotted yet), mean and +- standard deviation. This function should work for any nutrient other than PO4 due to zero's in dataset.
 
 Title vs non title is still work in progress
 
@@ -202,7 +197,7 @@ ggarrange(chla_2021, chla_2022, no3_2021, no3_2022, ncol = 2, nrow = 2)
 
 # 2022 Ratio Map
 
-This section will create animations and plots that show not only the site data but also it's relationship with down/upstream sites. This can be built out with continous data in mind and could live on a shiny app for funders/public to track changes in the watershed. 
+This section will create animations and plots that show not only the site data but also it's relationship with down/upstream sites. This can be built out with continous data in mind and could live on a shiny app for funders/public to track changes in the watershed.
 
 ## Function to get ratios
 
@@ -305,17 +300,12 @@ return(nutrient_ratios_points)
 
 ```
 
-
-
 ## Plotting/ animation functions
 
 ### Create Datasets for plotting
- 
- Uses the following functions:
- - get_ratios_2022: acquire data in correct format for specific nutrient
- - make_point_ratio_spatial: Create point dataset for nutrient
- - make_line_ratio_spatial_flowlines: Create line dataset for specific nutrient
- 
+
+Uses the following functions: - get_ratios_2022: acquire data in correct format for specific nutrient - make_point_ratio_spatial: Create point dataset for nutrient - make_line_ratio_spatial_flowlines: Create line dataset for specific nutrient
+
 ```{r}
 
 chla_nr_df <- get_ratios_2022(nutrient = "ChlA")
@@ -330,17 +320,15 @@ nutrient_ratios_points <- make_point_ratio_spatial(chla_nr_df)%>%
   mutate(date = as.Date(date_week))
 
 ```
- 
 
 This will create a plot for specific date_weeks in the data or animations for an entire year.
 
-
 ## Animation attempts
 
-### Tmap 
+### Tmap
 
- I could get the animation to work without a basemap. I could get the basemap and one date_week in view mode but no animation. AGH
- 
+I could get the animation to work without a basemap. I could get the basemap and one date_week in view mode but no animation. AGH
+
 ```{r}
 
  #tm_shape(filter(nutrient_ratios_points, date_week == "2022-08-08"& site_code %in% c(mainstem_res_set, "JWC", "PJW", "SLEP")), name = "Sampling Locations")+
@@ -372,10 +360,9 @@ tmap_animation(tester_lines, filename = "output/spatial/chla_tester_lines.gif", 
 
 ```
 
+## ggmap and gganimate
 
-## ggmap and gganimate 
-
-Need to improve AOI location, basemap appearance and colors for data display. 
+Need to improve AOI location, basemap appearance and colors for data display.
 
 ```{r}
 
@@ -406,9 +393,7 @@ animation <- animate(select_upper, nframes = frames, fps = 2 )
 
 ```
 
-
 # Functionalize these later!
-
 
 ```{r}
 
@@ -444,6 +429,3 @@ continous_season_animation<- function(year, cont_point_df, cont_line_df, nutrien
 
 
 ```
-
-
-

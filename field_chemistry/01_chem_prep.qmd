@@ -35,7 +35,6 @@ This looks like:
 
     -   Focus on NO3, PO4,
 
-
 ## Cleaning data
 
 -   Add Location data to chemistry
@@ -293,6 +292,7 @@ combined_mainstem <- filter(reservoir_chemistry, location == "Mainstem")%>%
 ```
 
 ### Graphing
+
 ```{r}
 
 combined_graph <- filter(combined_mainstem, site_code %in% c("JWC" , "PJW", "PBR", "PSF", "PNF", "PBD")
@@ -355,4 +355,3 @@ combined_boxplot_SC <- filter(combined_mainstem, site_code %in%c("PBR" ,"PJW", "
   facet_wrap(~fire+collector)
 plot(combined_boxplot_SC)
 ```
-
