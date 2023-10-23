@@ -13,3 +13,5 @@ cpf_targets/.DS_Store
 field_chemistry/.DS_Store
 data/
 data
+sharing_data/
+test_output/
