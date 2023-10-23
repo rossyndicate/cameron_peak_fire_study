@@ -13,20 +13,15 @@ This document is to work on graphs related to nutrients from Reservoirs/ Mainste
 source("field_chemistry/00_colors_and_groups.R")
 source("package_loader.R")
 # Load data
-reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")
+reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022_062023.feather")
 # Load metadata for units
 meta_units_table <- read_csv("data/field_chemistry/Poudre_Portal_Data/Units_Cam_Peak.csv")
 
 ```
 
+# Function
 
-
-
-
-# Function  
 This function takes in two nutrients and graphs them against each other. It also adds a regression line and a color gradient for the contributing area burn intensity.
-
-
 
 ```{r}
 # select only the mainstem reservoirs sites and data after 2020
@@ -82,8 +77,6 @@ two_nutrient_graph <- function(nutrient_x, nutrient_y){
 
 ```
 
-
-
 # Graphing any nutrient against itself vs nutrients
 
 ```{r}
@@ -105,7 +98,4 @@ for (i in nutrient_list){
 
 ```
 
-
-```
-
-
+\`\`\`
