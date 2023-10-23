@@ -5,12 +5,14 @@ format: html
 editor: visual
 self-contained: true
 ---
+
 ```{r}
 library(tibble)
 library(tidyverse)
 ```
 
 # Mainstem photos 2022
+
 ```{r}
 
 
@@ -42,8 +44,8 @@ file.rename(old_path, new_path)
 rm(list = ls())
 ```
 
-
 # Tributaries photos 2022
+
 ```{r}
 
 
@@ -75,6 +77,7 @@ rm(list = ls())
 ```
 
 # SF Res photos 2022
+
 ```{r}
 
 
@@ -106,6 +109,7 @@ rm(list = ls())
 ```
 
 # Reservoir photos 2022
+
 ```{r}
 
 
