@@ -5,11 +5,11 @@ baer_sbs <- function(watersheds){
   sf::sf_use_s2(FALSE)
   
   # Download some NHDPlusHR Data
-  hr_data <- nhdplusTools::download_nhdplushr("data/baer_soil_burn_severity/", 1019)
+  hr_data <- nhdplusTools::download_nhdplushr("data/metadata/baer_soil_burn_severity/", 1019)
   hr_flowlines <- nhdplusTools::get_nhdplushr(hr_data, layers = c("NHDFlowline"))
   hr_catchments <- nhdplusTools::get_nhdplushr(hr_data, layers = c("NHDPlusCatchment"))
 
-  sites <- sf::st_read('data/baer_soil_burn_severity/cpf_sites_sbs.shp') %>%
+  sites <- sf::st_read('data/metadata/baer_soil_burn_severity/cpf_sites_sbs.shp') %>%
     dplyr::filter(grepl("Reservoir|Inflow", Site_Nm)) %>%
     filter(sit_typ=="Reservoir") %>%
     sf::st_transform(4269)
@@ -42,7 +42,7 @@ baer_sbs <- function(watersheds){
   # temp2 <- tempfile()
   # unzip("data/baer_soil_burn_severity/CPF.zip", exdir = "data/baer_soil_burn_severity/")
   
-  sbs <- raster::raster("data/baer_soil_burn_severity/CameronPeak_SBS_final.tif") 
+  sbs <- raster::raster("data/metadata/baer_soil_burn_severity/CameronPeak_SBS_final.tif") 
   legend <- tibble(value = c(0,1,2,3,4,13),
                    legend = c("Unburned", "Very Low/Unburned", "Low", "Moderate", "High", "Unburned"))
   
@@ -78,3 +78,5 @@ baer_sbs <- function(watersheds){
     ungroup()
 
 }
+
+baer_sbs(watersheds = )
