@@ -18,7 +18,7 @@ source("package_loader.R")
 source("field_chemistry/00_colors_and_groups.R")
 
 
-reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")%>%
+reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022_062023.feather")%>%
   mutate(location = factor(location, levels = c("Inflow","Reservoir", "Outflow", "Stream", "Mainstem")))
 
 
@@ -55,6 +55,7 @@ chla_status_site_year <- reservoir_chemistry%>%
          perc_meso_eu = ((Eutrophic+Mesotrophic)/total_samples)*100, 
         perc_oligo = (Oligotrophic/total_samples) *100,
     Year = as.character(Year))
+
 
 long_chla_status <- chla_status_site_year%>%
   select(site_code, Year, total_samples, perc_eu, perc_meso, perc_meso_eu, perc_oligo)%>%
@@ -169,7 +170,7 @@ includes a highlighted graph for presentations
  chambers_plot <- ggarrange(chambers_chla_long,chambers_no3_long, ncol=1, nrow=2, common.legend=T)
   
 chambers_plot
- ggsave('output/2022_joer_cbrr_chla_no3_longitudinal_FINAL.jpg', width=15.5, height=10, dpi = 300)
+ #ggsave('output/2022_joer_cbrr_chla_no3_longitudinal_FINAL.jpg', width=15.5, height=10, dpi = 300)
  
  #highlighted version of graph for presentations
  
@@ -472,7 +473,7 @@ ggsave('output/chla_mainstem_timeline_boxplot.jpg',width=15,height=10)
 
 #Longitudinal +Boxplot
 ggarrange(mainstem_chla_long, mainstem_chla_boxplot, nrow = 2, ncol = 1)
-ggsave('output/chla_mainstem_longitudinal_boxplot.jpg',width=15,height=10)
+#ggsave('output/chla_mainstem_longitudinal_boxplot.jpg',width=15,height=10)
 
 
 
@@ -534,7 +535,7 @@ ggplot() +
 
 plot(chla_boxplot)
 
-ggsave("output/chla_Boxplot_main_res_2021_2022.jpg", width = 15, height =9)
+#ggsave("output/chla_Boxplot_main_res_2021_2022.jpg", width = 15, height =9)
 
 
 ```
@@ -584,7 +585,7 @@ ggplot(aes(x=reorder(site_year,order,max),y=ChlA, middle=mean(ChlA), fill=Waters
 
 plot(chla_boxplot_Res)
 
-ggsave("output/chla_dotplot_side_side_res_only.jpg", width = 15, height =9)
+#ggsave("output/chla_dotplot_side_side_res_only.jpg", width = 15, height =9)
 
 #dotplot and timeline
 ggarrange(chla_timeline, chla_boxplot_Res, nrow = 2, ncol = 1)
@@ -731,7 +732,7 @@ scale_color_manual(name = "Month", labels= c("June",
 
 plot(monthly_long_chla)
 
-ggsave("output/monthly_long_res_main_2022.jpg", width = 20, height = 9)
+#ggsave("output/monthly_long_res_main_2022.jpg", width = 20, height = 9)
 ```
 
 ## Inflow/outflow ratio
@@ -776,7 +777,7 @@ res_ratio_plot <- filter(joer_cbrr_ratios, Date != "2022-06-14")%>%
           axis.title = element_text(face = "bold"),
          axis.text.x = element_text(face = "bold"))
 
-ggsave("output/Res_Ratio.jpg",width = 22, height = 14)
+#ggsave("output/Res_Ratio.jpg",width = 22, height = 14)
 plot(res_ratio_plot)
 
 ```

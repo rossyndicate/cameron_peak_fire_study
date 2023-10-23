@@ -14,7 +14,7 @@ source("package_loader.R")
 source("field_chemistry/00_colors_and_groups.R")
 #Determning number of Samples....
 
-reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")%>%
+reservoir_chemistry <- read_feather("data/field_chemistry/cleaned/reservoir_chem_2021_2022_062023.feather")%>%
 filter( watershed != "Comanche Reservoir" & watershed != "Hourglass Reservoir"& Year>= "2021")
 
 meta_units_table <- read_csv("data/field_chemistry/Poudre_Portal_Data/Units_Cam_Peak.csv")
@@ -251,7 +251,7 @@ sc_boxplot <- nutrient_boxplot_graph('SC', title = TRUE)
 
  ggarrange(sc_boxplot,no3_boxplot,po4_boxplot,so4_boxplot,k_boxplot,
            ncol=1, nrow=6)#, common.legend=T) 
- ggsave('output/nutrient_boxplot_final_SC_NO3_PO4_SO4_K.jpg',
+ #ggsave('output/nutrient_boxplot_final_SC_NO3_PO4_SO4_K.jpg',
         width = 12.5, height = 16, dpi = 300)
  
  
@@ -259,7 +259,7 @@ sc_boxplot <- nutrient_boxplot_graph('SC', title = TRUE)
 #extra boxplot fig
 ggarrange(no3_boxplot,po4_boxplot,k_boxplot, cl_boxplot, 
           ncol=1, nrow=4)
-ggsave('output/no3_po4_k_cl_boxplot_final.jpg',
+#ggsave('output/no3_po4_k_cl_boxplot_final.jpg',
        width = 12.5, height = 15, dpi = 300)
 
 
@@ -267,7 +267,7 @@ ggsave('output/no3_po4_k_cl_boxplot_final.jpg',
 ggarrange(no3_boxplot,po4_boxplot,so4_boxplot,k_boxplot,na_boxplot,
           sc_boxplot,mg_boxplot,ca_boxplot,f_boxplot,cl_boxplot,
           ncol=1, nrow=10)
-ggsave('output/nutrient_boxplot_final_ONEROW_SC_NO3_SO4_Mg_F_PO4_K_Na_Ca_Cl.jpg',
+#ggsave('output/nutrient_boxplot_final_ONEROW_SC_NO3_SO4_Mg_F_PO4_K_Na_Ca_Cl.jpg',
        width = 30, height = 36, units= "in",dpi = 300)
 
 
@@ -353,7 +353,7 @@ ggarrange(no3_2022_boxplot,po4_2022_boxplot,so4_2022_boxplot,
           sc_2022_boxplot,mg_2022_boxplot,ca_2022_boxplot,
           f_2022_boxplot,cl_2022_boxplot,
           ncol=1, nrow=11)
-ggsave('output/nutrient_boxplot_2022_ONEROW_NO3_PO4_SO4_K_NH4_Na_SC_Mg_CA_F_Cl.jpg', width = 30, height = 36)
+#ggsave('output/nutrient_boxplot_2022_ONEROW_NO3_PO4_SO4_K_NH4_Na_SC_Mg_CA_F_Cl.jpg', width = 30, height = 36)
 
 
 ```
@@ -383,7 +383,7 @@ ggarrange(no3_2021_boxplot,po4_2021_boxplot,so4_2021_boxplot,k_2021_boxplot,
           nh4_2021_boxplot,na_2021_boxplot,sc_2021_boxplot,mg_2021_boxplot,
           ca_2021_boxplot,f_2021_boxplot,cl_2021_boxplot,
           ncol=1, nrow=11)
-ggsave('output/nutrient_boxplot_2021_ONEROW_NO3_PO4_SO4_Mg_F_PO4_NH4_K_Na_Ca_Cl.jpg', width = 30, height = 36)
+#ggsave('output/nutrient_boxplot_2021_ONEROW_NO3_PO4_SO4_Mg_F_PO4_NH4_K_Na_Ca_Cl.jpg', width = 30, height = 36)
 ```
 
 ### 2021 vs 2022 comparison timelines Chambers Complex
@@ -584,7 +584,7 @@ In_Res_out_chla_grouped <- Reservoir_systems_Chemistry%>%
 
 plot(In_Res_out_chla_grouped)
 
-ggsave("output/location_Grouped_Chla_Boxplot.jpg", width = 11, height = 9)
+#ggsave("output/location_Grouped_Chla_Boxplot.jpg", width = 11, height = 9)
 
 # Plotting SO4, NO3, CHLA, K together
 
@@ -622,7 +622,7 @@ no3_vs_k <- res_chem_k_no3%>%
   theme_bw(base_size=15) +
   theme(legend.position = "none") +
   labs( x = "K (mg/L)", y = "NO3 (mg/L) ")
-ggsave("test_fig/K_vs_no3.jpg", width = 11, height = 9)
+#ggsave("test_fig/K_vs_no3.jpg", width = 11, height = 9)
 
 
 
@@ -638,7 +638,7 @@ k_vs_chla <- res_chem_k_no3%>%
   labs( x = "K (mg/L)", y = "Chlorophyll a (μg/L)")
 
 plot(k_vs_chla)
-ggsave("test_fig/K_vs_chla.jpg", width = 11, height = 9)
+#ggsave("test_fig/K_vs_chla.jpg", width = 11, height = 9)
 
 
 no3_vs_chla <- res_chem_k_no3%>%

@@ -46,8 +46,10 @@ This looks like:
 ```{r}
 
 
-reservoir_chemistry <- read_csv('data/field_chemistry/raw/ReservoirChemistry_010523.csv')%>%
-  mutate(Date=as.Date(Date,format="%d-%b-%y"))%>%
+reservoir_chemistry <- read_csv('data/field_chemistry/raw/ReservoirChemistry_073123.csv')%>%
+  mutate(Date = parse_date_time(Date, 
+                                  orders = c('%m/%d/%y',
+                                             '%d-%b-%y')))%>%
   filter(SampleType == "NORM") %>%
   mutate (FCW_Number = as.numeric(gsub('FCW ', '', IDNo)), 
           Year =  year(Date), 
@@ -142,7 +144,7 @@ reservoir_chemistry <- read_csv('data/field_chemistry/raw/ReservoirChemistry_010
   dplyr::arrange(as.factor(status))
 
 # write a feather file named reservoir_chem_2021_2022.feather
-write_feather(reservoir_chemistry, "data/field_chemistry/cleaned/reservoir_chem_2021_2022.feather")
+write_feather(reservoir_chemistry, "data/field_chemistry/cleaned/reservoir_chem_2021_2022_062023.feather")
 
 
 ```
@@ -248,7 +250,7 @@ reservoir_chemistry_concise <- reservoir_chemistry%>%
   select(Site, site_code, Date,Lat,Long,watershed,Watershed_Level, status, Turbidity,TSS,ChlA,pH,ANC,SC,Na,NH4,K,Mg,Ca,F,Cl,NO3,PO4,SO4, DOC, DTN)
 
 write_csv(reservoir_chemistry_concise, 
-          "data/field_chemistry/Poudre_Portal_Data/CPF_reservoir_chemistry_up_to_110122.csv")
+          "data/field_chemistry/Poudre_Portal_Data/CPF_reservoir_chemistry_up_to_071023.csv")
 
 ```
 
@@ -305,7 +307,7 @@ combined_graph <- filter(combined_mainstem, site_code %in% c("JWC" , "PJW", "PBR
   facet_wrap(~site_code, ncol = 3)+
   scale_color_viridis_b()
 
-ggplotly(combined_graph)
+#ggplotly(combined_graph)
 
 
 
@@ -320,7 +322,7 @@ combined_graph <- filter(combined_mainstem, site_code %in% c("PBR"))%>%
 
 plot(combined_graph)
 
-ggsave("output/mainstem_timeline_no3_2008_2022_FCGOV_RMRS.jpg", width = 12, height = 9, dpi = 300, units = "in" )
+#ggsave("output/mainstem_timeline_no3_2008_2022_FCGOV_RMRS.jpg", width = 12, height = 9, dpi = 300, units = "in" )
 
 combined_boxplot_no3 <- filter(combined_mainstem, site_code %in%c("PBR" ,"PJW", "JWC","PBD"))%>%
   ggplot(aes(x= site_code , y=NO3, fill =site_code )) + 
@@ -332,7 +334,7 @@ geom_boxplot()+
   facet_wrap(~fire+collector)
 plot(combined_boxplot_no3)
 
-ggsave("output/mainstem_boxplot_no3_2008_2022_FCGOV_RMRS.jpg", width = 14, height = 9, dpi = 300, units = "in" )
+#ggsave("output/mainstem_boxplot_no3_2008_2022_FCGOV_RMRS.jpg", width = 14, height = 9, dpi = 300, units = "in" )
 
 combined_boxplot_K <- filter(combined_mainstem, site_code %in%c("PBR" ,"PJW", "JWC","PBD"))%>%
   ggplot()+
