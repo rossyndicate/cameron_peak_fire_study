@@ -495,14 +495,14 @@ Chla MDL .05 mg/L
 study_reservoir_chla <- filter(reservoir_chemistry, site_code %in% mainstem_res_set & Year >2020)%>%
 filter(!is.na(ChlA))%>%
   mutate(site_year = paste(site_code, Year, sep = " "),
-         dayofyear = yday(Date))
+         dayofyear = yday(Date)) 
+         
          
 chla_boxplot <- study_reservoir_chla%>%
 ggplot() + 
   
   geom_boxplot(aes(x=reorder(site_year,order,max),y=ChlA, middle=mean(ChlA), fill=Watershed_Level, colour = factor(Year))) +
   scale_color_grey(start = 0.4, end = 0)+
-  
   geom_rect(data=study_reservoir_chla, inherit.aes=FALSE, aes(xmin="LNGR 2021", xmax="LNGO 2022", ymin=-.5,
                 ymax=0), color="transparent", fill="#0072B2", alpha=0.01)+
   geom_rect(data=study_reservoir_chla, inherit.aes=FALSE, aes(xmin="JOEI 2021", xmax="JOER 2022", ymin=-.5,
