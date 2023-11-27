@@ -291,4 +291,12 @@ source("src/paper_figs/build_ts_plot.R")
 
  # ggsave("test_fig/turb_pbd_grabs_0809.jpg", dpi = 300, width = 8, height = 6)
 ```
+## Correlate grab and sensor data
+
+```{r}
+source("src/analysis_fxns/correlate_grab_sensor.R")
+
+correlate_grab_sonde(sites = "all", parameter = "turb", timestep = "15min" )
+
+```
 
