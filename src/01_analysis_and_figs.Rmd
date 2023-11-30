@@ -50,6 +50,13 @@ tidy_chem <- most_recent_chem%>%
 rm(time_data, order_table)
 
 ```
+## Run above to get data loaded
+
+```{r}
+print("Data Successfully loaded for analysis")
+```
+
+
 # Reporting Calculations
 These data and calculations will be included in the funder report to give an overview of how the system is changing year to year based on our study
 
@@ -243,7 +250,7 @@ source("src/paper_figs/build_long_plot.R")
 # Sensor plots
 
 This section works but am waiting on grab sample data from RMRS to make correlation plots between grab sample and lab data
-
+## Time series sensor data
 ```{r}
 source("src/paper_figs/build_ts_plot.R")
 
@@ -296,7 +303,26 @@ source("src/paper_figs/build_ts_plot.R")
 ```{r}
 source("src/analysis_fxns/correlate_grab_sensor.R")
 
-correlate_grab_sonde(sites = "all", parameter = "turb", timestep = "15min" )
+cations_anions <- filter(chem_units, simple %nin% c("Turbidity","TSS","ChlA", "pH", "PO4"))%>%pull(simple)
+
+# Set custom values for sites, sensor_param, timestep, and matched_axes
+custom_values <- list(
+  sites = "all",
+  sensor_param = "actual_cond",
+  timestep = "15min",
+  matched_axes = FALSE
+)
+
+# Create a partially applied function
+partial_correlate_grab_sonde <- partial(correlate_grab_sonde, !!!custom_values)
+
+# Map over the vector
+sonde_vs_lab <- map(cations_anions, ~ partial_correlate_grab_sonde(grab_param = .x))
+
+#example function
+# correlate_grab_sonde(sites = "all", sensor_param = "spec_cond", grab_param = "Turbidity", timestep = "15min", matched_axes = FALSE)
+
+walk(sonde_vs_lab, ~print(.))
 
 ```
 
