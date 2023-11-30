@@ -17,7 +17,7 @@ pack_req <- c(
   #spatial packages
   "sf","terra","nhdplusTools", "tigris","raster", "leaflet","tmap",
   # plotting
-  "ggpubr","ggthemes","scales","corrplot","gghighlight", "geomtextpath", "ggbeeswarm","plotly",
+  "ggpubr","ggthemes","scales","corrplot","gghighlight", "geomtextpath", "ggbeeswarm","plotly", "ggpmisc",
   # web scrapping
   "rjson", "rvest", "dataRetrieval", "httr", "jsonlite",
   #extra
@@ -68,6 +68,9 @@ sensor_meta <- tibble(
 genomic_dates <- as.Date(c("2022-06-22", "2022-08-25", "2022-09-19"))
 #JW and Chambers complex
 jw_chambers_complex <- c("JOEI", "JOER", "CBRR", "CBRI", "CHD")
+
+#Sonde sites 2023
+sonde_sites <- c("JOEI", "CBRI", "CHD", "PBD")
 
 #Weekly reservoir study sites
 mainstem_res_set <- c("CBRR", "CHD", "JOEI", "JOER", "CBRI", "PTRR", "PTRO", "BMD", "BRNR", "LNGO", "LNGR")
