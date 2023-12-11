@@ -247,6 +247,17 @@ source("src/paper_figs/build_long_plot.R")
 
 ```
 
+
+## South Fork filled/empty comparison
+
+```{r}
+source("src/analysis_fxns/sf_res_impact.R")
+
+sf_plots <- map(.x = all_params, .f = plot_sf_impact)
+walk(sf_plots, plot)
+```
+
+
 # Sensor plots
 
 This section works but am waiting on grab sample data from RMRS to make correlation plots between grab sample and lab data
