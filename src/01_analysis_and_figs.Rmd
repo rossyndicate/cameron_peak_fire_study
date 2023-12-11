@@ -1,0 +1,339 @@
+---
+title: "Analysis and Figures"
+author: "Sam Struthers"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+source("src/00_analysis_setup.R")
+```
+
+# Grab data
+
+```{r}
+#discrete sample data and location metadata from most recent pub
+data_version = "v10.18.23"
+source("src/analysis_fxns/grab_zenodo_data.R")
+
+all_params <- chem_units%>%
+  pull(simple)
+# sensor data
+source("src/analysis_fxns/grab_sensor_data.R")
+
+```
+
+## Date/Times not in Zenodo dataset
+
+This will be incorporated into the next data release, until then this is how this data will be added
+
+```{r}
+time_data <- read_csv_arrow("data/field_chemistry/raw//sites_times_data_20231117.csv")%>%
+  mutate(Date = as.Date(Date, format = "%d-%b-%y"), 
+         Year = year(Date))%>%
+  filter(Era == "FCW" & Year >= 2020)%>%
+  select(FCW_Number = EraSamp , Time, Field_DO_mgL, `Field_Cond_µS/cm`, Field_Temp_C)
+```
+
+## Tidy discrete
+
+```{r}
+tidy_chem <- most_recent_chem%>%
+  filter(Year > 2020)%>%
+  left_join(time_data, by = "FCW_Number")%>%
+  mutate(dt = case_when( !is.na(Time) ~ as.POSIXct(paste0(Date," ", Time), format = "%Y-%m-%d %H:%M"), 
+                         TRUE ~ NA), 
+         distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
+  left_join(order_table, by = "site_code") 
+#time data and site order now added to tidy chem and thus not needed
+rm(time_data, order_table)
+
+```
+## Run above to get data loaded
+
+```{r}
+print("Data Successfully loaded for analysis")
+```
+
+
+# Reporting Calculations
+These data and calculations will be included in the funder report to give an overview of how the system is changing year to year based on our study
+
+## Chlorophyll a status
+
+In cold water lakes (our study sites), mesotrophic levels are defined as between 2.6 and 8 µg/L, and eutrophic levels are greater than 8 µg/L. Under 2.6 µg/L is considered Oligotrophic. 
+```{r}
+
+chla_status_site_year <- tidy_chem%>%
+  filter(!is.na(ChlA))%>%
+  mutate(eu_status  = case_when(ChlA >= 2.6 &ChlA <= 8 ~ "Mesotrophic", 
+                                ChlA > 8 ~ "Eutrophic",
+                                ChlA < 2.6 ~ "Oligotrophic"))%>%
+  group_by(site_code, Year, eu_status)%>%
+  summarise(eu_stats = n())%>%
+  ungroup()%>%
+  pivot_wider(names_from = eu_status, values_from = eu_stats)%>%
+  mutate_at(vars(-Year), ~replace(., is.na(.), 0))%>%
+  rowwise()%>%
+  mutate(total_samples = sum(c(Eutrophic, Mesotrophic, Oligotrophic)),
+    perc_eu = round((Eutrophic/total_samples)*100, digits= 1), 
+         perc_meso = round((Mesotrophic/total_samples)*100, digits= 1),
+         perc_meso_eu = round(((Eutrophic+Mesotrophic)/total_samples)*100, digits= 1), 
+        perc_oligo = round((Oligotrophic/total_samples) *100, digits= 1),
+    Year = as.character(Year))
+
+
+long_chla_status <- chla_status_site_year%>%
+  select(site_code, Year, total_samples, perc_eu, perc_meso, perc_meso_eu, perc_oligo)%>%
+  pivot_longer(cols = c(perc_eu, perc_meso, perc_meso_eu, perc_oligo), names_to = "category", values_to = "value" )
+
+status_plot <- long_chla_status%>%
+  filter(site_code %in% mainstem_Res_only )%>%
+  ggplot(aes(x = Year, y = value,group = site_code, color =  site_code))+
+  scale_color_manual(values = colorsBS_site_code)+
+ geom_line()+
+   geom_point()+
+  theme_bw(base_size = 15)+
+facet_wrap(~category)
+plot(status_plot)
+
+
+
+```
+
+## 
+```{r}
+
+
+chla_per_year <-tidy_chem%>%
+  select(ChlA, Year, site_code, Date, watershed)%>%
+  na.omit()%>%
+  group_by(Year)%>%
+  summarise(count_year = n())
+
+
+chla_per_site_year <-tidy_chem%>%
+  select(ChlA, Year, site_code)%>%
+  na.omit()%>%
+  group_by(Year, site_code)%>%
+  summarise(n = n(), 
+         mean = mean(ChlA), 
+         median = median(ChlA))%>%
+  ungroup()%>%
+  dplyr::arrange(site_code,Year)
+
+```
+
+
+# Discrete data plots
+
+## Basic Boxplots 
+```{r}
+source("src/analysis_fxns/build_basic_plot.R")
+
+result_list <- map(all_params, ~build_basic_chem_plot(sites = mainstem_Res_only, param = .x, style = "timeline"))
+
+walk(result_list, ~print(.))
+```
+
+## Basic Timelines
+```{r}
+
+```
+
+
+## Reservoir Dotplots (2021-2023)
+
+Tried to functionalize but the bin size is an issue for other parameters...\
+Params that this works for:
+
+-   Chla
+
+-   DOC
+
+-   SO4 (kinda)
+
+-   Ca
+
+-   SC (barely)
+
+```{r}
+# graph only res data
+source("src/analysis_fxns/build_res_dotplot.R")
+
+chla_dotplot_res <- build_res_dotplot(param = "ChlA")+
+#adding meso and eutrophic levels for cold lakes
+ geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+    geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+    #annotate(geom="text", label= "MDL Limit (μg/L)", x="CBRR 2022", y=.075, vjust= -1)+
+    annotate(geom="text", label= "Mesotrophic", x=1.15, y=2.6, vjust= -1, size = 4)+
+    annotate(geom="text", label= "Eutrophic", x= 1.5, y=8, vjust= -1, size = 5)+
+   #fixing y axis
+    coord_cartesian(ylim=c(0,12))
+
+plot(chla_dotplot_res)
+#ggsave("data/figs_output/2023_figs/res_dotplots_2021_2023.jpg", dpi = 300, width = 18, height = 10)
+
+#check out all parameters
+
+
+test_plots <- map(all_params, build_res_dotplot)
+
+walk(test_plots, ~print(.))
+```
+
+## Inflow/Outflow Ratio
+
+Not yet working/ need the full dataset for it to look good in 2023
+
+```{r}
+
+
+joer_cbrr_ratios <- filter(tidy_chem, site_code %in% c("JOEI",
+                                                                "JOER",
+                                                                "CBRI",
+                                                                "CBRR",
+                                                                "CHD"))%>%
+      select(Date,site_code,ChlA)%>%
+  filter(!is.na(ChlA))%>%
+  mutate(site_code = 
+           #found typo in dataset, corrected site name from CBRI to CBRR
+           case_when((Date == as.Date("2022-10-25")&ChlA == 3.92 ) ~ "CBRR" , 
+                               TRUE ~ site_code))%>%
+  pivot_wider(id_cols = Date, names_from = site_code, values_from = ChlA)%>%
+  mutate(jw_ratio = CBRI / JOEI,
+         chambers_ratio = CHD/ CBRI, 
+         Year = year(Date))
+
+
+
+res_ratio_plot <- filter(joer_cbrr_ratios, Date != "2022-06-14")%>%
+  ggplot()+
+  geom_line(aes(x=Date, y = jw_ratio, colour ="Joe Wright"), size = 3)+
+  geom_line(aes(x=Date, y = chambers_ratio, colour ="Chambers"), size = 3)+
+  geom_point(aes(x=Date, y = chambers_ratio, size = CBRR, colour ="Chambers" ))+
+  geom_point(aes(x=Date, y = jw_ratio, size = JOER, colour ="Joe Wright"))+
+   #geom_text(aes(as.Date("2021-06-15"), 1, label= "Inflow = Outflow", vjust=-1))+
+  scale_size_continuous(range = c(2,17))+
+  theme_bw(base_size=25) +
+  geom_abline(aes(slope=0, intercept=1), color='black', linetype="solid", label = "Inflow = Outflow")+
+  labs(size = "Chl-a Levels at Reservoir")+
+  scale_color_manual(name = "Reservoir", values = c("Chambers" = "#E69F00", "Joe Wright" = "#56B4E9"))+
+ # theme(axis.title.y = element_text(angle = 0, vjust = .5)) +
+  labs( x = "Date", y = "Ratio: Outflow Chl-a / Inflow Chl-a" )+
+  facet_wrap( ~Year, scales = "free_x" )+
+  
+  theme(legend.justification = c(.05, .9), legend.position = c(.05, .9),legend.box = "horizontal",
+          axis.title = element_text(face = "bold"),
+         axis.text.x = element_text(face = "bold"))
+
+#ggsave("output/Res_Ratio.jpg",width = 22, height = 14)
+plot(res_ratio_plot)
+
+
+```
+
+## Longitudinal
+
+Not yet working
+
+```{r}
+source("src/paper_figs/build_long_plot.R")
+
+
+# 2023 weeks "28" "31" "36"
+#2022 weeks "22","28","32", "38", "42"
+
+```
+
+
+## South Fork filled/empty comparison
+
+```{r}
+source("src/analysis_fxns/sf_res_impact.R")
+
+sf_plots <- map(.x = all_params, .f = plot_sf_impact)
+walk(sf_plots, plot)
+```
+
+
+# Sensor plots
+
+This section works but am waiting on grab sample data from RMRS to make correlation plots between grab sample and lab data
+## Time series sensor data
+```{r}
+source("src/paper_figs/build_ts_plot.R")
+
+# sites <- c("JOEI", "CBRI", "CHD")
+# param_oi <- filter(sensor_meta, sensor_meta$key_param == TRUE)%>%
+#   pull(param_common)
+# 
+# combinations <- expand.grid(site_name = c("JOEI", "CBRI", "CHD"), param = param_oi)
+# 
+# # Use pmap to apply the function to each combination
+# plots_list <- pmap(combinations, build_ts_plot)
+# 
+#       chd_chla <- build_ts_plot(site_name = "chd", param = "chla", color = "#00946c")+
+#       theme(axis.title.x = element_blank(), axis.title.y = element_blank())+
+#         labs(title = "Chambers Outflow")
+#   chd_depth <-build_ts_plot(site_name = "chd",param = "depth",  color = "#0072B2")+
+#     theme(axis.title.y = element_blank())
+# 
+#     cbri_chla <- build_ts_plot(site_name = "cbri", param = "chla", color = "#00946c")+
+#      theme(axis.title.x = element_blank())+
+#       labs(title = "Joe Wright Outflow/Chambers Inflow")
+#     #       axis.title.y = element_blank())
+#   cbri_depth <-build_ts_plot(param = "depth", site_name = "cbri", color = "#0072B2")
+#   
+#   ggarrange(cbri_chla, chd_chla, cbri_depth,chd_depth,  nrow = 2, ncol = 2)
+#   #ggsave("test_fig/chla_depth_cbri_chd.jpg", dpi = 300, width = 12, height = 8)
+#   
+#       joei_chla <- build_ts_plot(site_name = "joei", param = "chla", color = "#00946c")+
+#     theme(axis.title.x = element_blank())
+#   joei_depth <-build_ts_plot(site_name = "joei",param = "depth",  color = "#0072B2")
+#   
+#   
+#     ggarrange(chd_chla, chd_depth, nrow = 2)
+#   #ggsave("test_fig/chla_depth_chd.jpg", dpi = 300)
+#   
+#   
+#   
+#    ggarrange(joei_chla, cbri_chla,chd_chla, joei_depth, cbri_depth,chd_depth, nrow = 2, ncol = 3)
+#   #ggsave("test_fig/chla_depth_jw_long.jpg", dpi = 300)
+#   
+#    
+#    
+#    pbd_turb_grabs <- build_ts_plot(site_name = "pbd", param = "turb", color = "#85722b", start_dt = "2023-07-23 00:00", end_dt = "2023-09-15 00:00", grabs = TRUE)+
+#      ylim(0,1000)
+
+ # ggsave("test_fig/turb_pbd_grabs_0809.jpg", dpi = 300, width = 8, height = 6)
+```
+## Correlate grab and sensor data
+
+```{r}
+source("src/analysis_fxns/correlate_grab_sensor.R")
+
+cations_anions <- filter(chem_units, simple %nin% c("Turbidity","TSS","ChlA", "pH", "PO4"))%>%pull(simple)
+
+# Set custom values for sites, sensor_param, timestep, and matched_axes
+custom_values <- list(
+  sites = "all",
+  sensor_param = "actual_cond",
+  timestep = "15min",
+  matched_axes = FALSE
+)
+
+# Create a partially applied function
+partial_correlate_grab_sonde <- partial(correlate_grab_sonde, !!!custom_values)
+
+# Map over the vector
+sonde_vs_lab <- map(cations_anions, ~ partial_correlate_grab_sonde(grab_param = .x))
+
+#example function
+# correlate_grab_sonde(sites = "all", sensor_param = "spec_cond", grab_param = "Turbidity", timestep = "15min", matched_axes = FALSE)
+
+walk(sonde_vs_lab, ~print(.))
+
+```
+

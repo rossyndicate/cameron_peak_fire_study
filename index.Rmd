@@ -1,0 +1,218 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+source("src/00_analysis_setup.R")
+```
+
+# Grab data
+
+```{r}
+#discrete sample data and location metadata from most recent pub
+data_version = "v10.18.23"
+source("src/analysis_fxns/grab_zenodo_data.R")
+
+all_params <- chem_units%>%
+  pull(simple)
+# sensor data
+source("src/analysis_fxns/grab_sensor_data.R")
+
+```
+
+## Date/Times not in Zenodo dataset
+
+This will be incorporated into the next data release, until then this is how this data will be added
+
+```{r}
+time_data <- read_csv_arrow("data/field_chemistry/raw//sites_times_data_20231117.csv")%>%
+  mutate(Date = as.Date(Date, format = "%d-%b-%y"), 
+         Year = year(Date))%>%
+  filter(Era == "FCW" & Year >= 2020)%>%
+  select(FCW_Number = EraSamp , Time, Field_DO_mgL, `Field_Cond_µS/cm`, Field_Temp_C)
+```
+
+## Tidy discrete
+
+```{r}
+tidy_chem <- most_recent_chem%>%
+  filter(Year > 2020)%>%
+  left_join(time_data, by = "FCW_Number")%>%
+  mutate(dt = case_when( !is.na(Time) ~ as.POSIXct(paste0(Date," ", Time), format = "%Y-%m-%d %H:%M"), 
+                         TRUE ~ NA), 
+         distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
+  left_join(order_table, by = "site_code") 
+#time data and site order now added to tidy chem and thus not needed
+rm(time_data, order_table)
+
+```
+## Run above to get data loaded
+
+```{r}
+print("Data Successfully loaded for analysis")
+```
+# Map
+
+Things in map
+WQ sensor sites
+JWC+BS res
+Beav Sites
+Mainstem
+
+ Things to include in the site
+- what part of the study
+_ # of samples per year
+- if sensor, POR for sensor deployment and # of match ups between sonde and grab
+- if reservoir, # of RS match ups
+
+## Create data frames
+
+### All sites samples
+
+```{r}
+
+
+sample_nums <- most_recent_chem %>%
+  # mutate(site_code = case_when(
+  #   site_code == "SLEP" ~"PFAL", 
+  #   TRUE ~ site_code
+  # ))%>%
+  group_by(site_code, Year) %>%
+  count(name = "samples") %>%
+  pivot_wider(names_from = Year, values_from = samples, values_fill = 0)%>%
+  mutate(`# of samples (2021 & 2022)` = `2021` +`2022`)%>%
+  select(site_code, `# of samples (2023)` = `2023`, `# of samples (2021 & 2022)`)
+  
+
+
+
+
+```
+
+
+### sensors
+```{r}
+PBR <- tibble(site_code = "PBR",
+  POR = "2023-4-20 : 2023-11-13",
+              sensor_measurements = 13364,
+              unique_parameters = "pH, Turbidity, Specific Conductivity, DO, Temperature")
+
+sensor_sites <- sensor_data %>%
+  filter(parameter %nin% c("% Saturation O₂","Resistivity", "ORP", "Actual Conductivity" ))%>%
+  group_by(site)%>%
+  dplyr::summarise(min_date = as.Date(min(timestamp)),
+                   max_date = as.Date(max(timestamp)), 
+                   sensor_measurements = n_distinct(timestamp),
+    unique_parameters = toString(unique(parameter)) 
+                   )%>%
+  ungroup()%>%
+  mutate(POR = paste0(min_date, " : ", max_date),
+         site_code = toupper(site))%>%
+  plyr::rbind.fill(PBR)%>%
+  left_join(most_recent_meta, by = "site_code")%>%
+  left_join(sample_nums, by = "site_code")%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)%>%
+  select(Site_Name, POR,sensor_measurements, unique_parameters,watershed, `# of samples (2023)`, `# of samples (2021 & 2022)`)
+  
+
+mapview::mapview(sensor_sites, layer.name = "Water Quality Sensor Sites",col.regions = "#34b1eb", cex = 8)
+
+```
+
+### reservoirs
+
+```{r}
+
+
+CLP_RS <- read_feather("data/RS/CLP_point_DSWE1_for_analysis_2023-12-08.feather")%>%
+  filter(year(date)%in% c(2021, 2022, 2023)& GNIS_Name %in% c("Chambers Lake", "Comanche Reservoir",
+                                                              "Barnes Meadow Reservoir",
+                                                              "Joe Wright Reservoir", "Long Draw Reservoir", 
+                                                              "Hourglass Reservoir", "Peterson Lake" ))%>%
+  select(site_name = GNIS_Name, date)%>%
+  mutate(site_code = case_when(
+    site_name == "Chambers Lake" ~ "CBRR", 
+    site_name == "Barnes Meadow Reservoir" ~ "BRNR", 
+    site_name == "Joe Wright Reservoir" ~ "JOER", 
+    site_name == "Long Draw Reservoir" ~ "LNGR", 
+    site_name == "Peterson Lake" ~ "PTRR", 
+    site_name == "Comanche Reservoir" ~ "COMR", 
+    site_name == "Hourglass Reservoir" ~ "HORR"))%>%
+  rename(RS_date = date)%>%
+  distinct()
+
+
+# for each RS image, see if there is a grab sample at the same site and the grab date is within +-3 days of RS image
+
+RS_match_ups <- tibble()
+for(i in 1:nrow(CLP_RS)){
+  rs_loop <- most_recent_chem%>%
+    filter(site_code == CLP_RS$site_code[i] & Date >= (CLP_RS$RS_date[i] - days(4)) & Date <= (CLP_RS$RS_date[i] + days(4)))%>%
+    mutate(RS_date = CLP_RS$RS_date[i])%>%
+    rename(grab_date = Date)
+  
+  RS_match_ups <- rbind(RS_match_ups, rs_loop)
+  rm(rs_loop, i)
+}
+
+
+
+RS_matches_summary <- RS_match_ups%>%
+  group_by(site_code, Year)%>%
+  summarise(`Grab and RS Matches (within 4 days)` = n())
+
+images_overall <- CLP_RS%>%
+  filter(month(RS_date)>=5 & month(RS_date)<=11)%>%
+  mutate(Year = year(RS_date))%>%
+  group_by(Year, site_code)%>%
+  summarise(`RS Images` = n())%>%
+  left_join(RS_matches_summary, by = c("Year", "site_code"))
+
+images_2021_2022 <- filter(images_overall, Year %in% c(2021, 2022))%>%
+  group_by(site_code)%>%
+  summarise(`RS Images (2021 and 2022)` = sum(`RS Images`), 
+            `Grab and RS Matches (2021 and 2022)` = sum(`Grab and RS Matches (within 4 days)`))
+
+reservoir_sites <- filter(images_overall, Year == 2023)%>%
+  left_join(images_2021_2022, by = "site_code")%>%
+  left_join(most_recent_meta, by = "site_code")%>%
+  left_join(sample_nums, by = "site_code")%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)%>%
+
+  select(Site_Name, `2023 Grab and RS Matches (within 4 days)` = `Grab and RS Matches (within 4 days)`,
+         `2023 RS Images` = `RS Images`,`RS Images (2021 and 2022)`, `# of samples (2023)`, `Grab and RS Matches (2021 and 2022)`, `# of samples (2021 & 2022)`)
+
+mapview::mapview(reservoir_sites, layer.name = "Reservoir Sites",col.regions = "#009E73", cex = 8)+
+mapview::mapview(sensor_sites, layer.name = "Water Quality Sensor Sites",col.regions = "#34b1eb", cex = 8)
+
+
+```
+
+### Additional Grab locations
+all the sites we sample with no sensor and no RS
+
+```{r}
+  add_sampling <- filter(most_recent_meta, Campaign %in% c("Mainstem","South Fork","Chambers Complex","Longdraw" )& site_code %nin% unique(CLP_RS$site_code) & site_code %nin% c("JOEI", "CBRI", "PBR",  "CHD","LRT",  "SFM", "PBD", "SLEP")& watershed != "CLP  Mainstem-Fort Collins" )%>%
+  left_join(sample_nums, by = "site_code")%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)%>%
+  select(Site_Name, `# of samples (2023)`, `# of samples (2021 & 2022)`, watershed)
+
+Manners_bridge <- tibble(Site_Name = "Manner's Bridge WQ",
+  POR = "2023-3-23 : 2023-11-13",
+              sensor_measurements = 28712,
+              unique_parameters = "pH, Turbidity, Specific Conductivity, DO, Temperature", 
+              Long = -105.268816, 
+              Lat = 40.696629   )%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)
+
+mapview::mapview(reservoir_sites, layer.name = "Sampled Reservoir Sites",col.regions = "#009E73", cex = 8)+
+mapview::mapview(sensor_sites, layer.name = "Sampled Water Quality Sensor Sites",col.regions = "#34b1eb", cex = 8)+ 
+  mapview::mapview(add_sampling, layer.name = "Additional Water Sampling",col.regions = "#D55E00", cex = 4)+
+  mapview::mapview(Manners_bridge, layer.name = "Manner's Bridge WQ: FC Monitoring", col.regions = "#CC79A7", cex= 6 )
+
+
+```
+
+
+
