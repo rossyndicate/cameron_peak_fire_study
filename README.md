@@ -1,8 +1,5 @@
 # Cameron Peak Fire Study
 How do wildfires affect water quality and algal growth in high elevation reservoirs, and are those changes propagated downstream?
-### Primary ROSSyndicate Contributors:
-- Sam Struthers
-- Katie Willi
 
 # Background Information: 
 
@@ -25,6 +22,10 @@ The majority of this dataset is water chemistry grab sample data collected post-
 ### Sample Collection:
 
 Samples were collected and processed using the Rocky Mountain Research Station's Biogeochemistry Lab, overseen by Timothy Fegel and Charles Rhoades, according to the methods described in rmrs_procedures.png
+
+### Primary ROSSyndicate Contributors:
+- Sam Struthers
+- Katie Willi
 
 
 
