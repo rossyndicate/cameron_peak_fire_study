@@ -14,7 +14,8 @@ source("src/00_analysis_setup.R")
 
 ```{r}
 #discrete sample data and location metadata from most recent pub
-data_version = "v10.18.23"
+DOI = "10372690"
+data_version = "v12.13.23b"
 source("src/analysis_fxns/grab_zenodo_data.R")
 
 all_params <- chem_units%>%
@@ -24,17 +25,6 @@ source("src/analysis_fxns/grab_sensor_data.R")
 
 ```
 
-## Date/Times not in Zenodo dataset
-
-This will be incorporated into the next data release, until then this is how this data will be added
-
-```{r}
-time_data <- read_csv_arrow("data/field_chemistry/raw//sites_times_data_20231117.csv")%>%
-  mutate(Date = as.Date(Date, format = "%d-%b-%y"), 
-         Year = year(Date))%>%
-  filter(Era == "FCW" & Year >= 2020)%>%
-  select(FCW_Number = EraSamp , Time, Field_DO_mgL, `Field_Cond_µS/cm`, Field_Temp_C)
-```
 
 ## Tidy discrete
 
@@ -102,7 +92,8 @@ plot(status_plot)
 
 ```
 
-## 
+## chla stats
+
 ```{r}
 
 
@@ -125,6 +116,66 @@ chla_per_site_year <-tidy_chem%>%
 
 ```
 
+# Mean all params
+
+Code to make SI tables for minimum and maximum values 
+```{r}
+
+yearly_means <- most_recent_chem%>%
+  filter(Campaign %nin% c("CLP  Mainstem-Fort Collins","CLP Mainstem-Canyon" )& site_code %nin% c("BMD","PJW","JWC"  ,"PBR","PBD", "PNF","PSF","SFM","SAWM", "LDRT1", "legacy","timberline","ELC","archery","PFAL") & Year >= 2021)%>%
+  select(-c("data_source","Lat","Long","location","Campaign","watershed","status","Buffer_Level","Watershed_Level","distance_upstream_km", "FCW_Number"))%>%
+  group_by(Year, site_code, Site)%>%
+  summarise(across(starts_with(all_params), mean, na.rm = TRUE),
+            .groups = 'drop')
+
+table_data <- yearly_means %>%
+  pivot_longer(cols = c(Turbidity:SO4), names_to = "Parameter", values_to = "Value") %>%
+  pivot_wider(names_from = Parameter, values_from = Value, names_prefix = paste0(Year, Parameter), values_fill = 0)
+
+
+
+subset_table <- yearly_means%>%
+  mutate(Site = paste0(Site, " (", site_code, ")"))%>%
+  select(Site, Year, Turbidity, TSS, ChlA)%>%
+  pivot_longer(cols = c(Turbidity:ChlA), names_to = "Parameter", values_to = "Value")%>%
+  pivot_wider(names_from = c(Parameter, Year), values_from = Value, values_fill = 0)%>%
+  select(Site, order(colnames(.)))
+
+  
+
+table <- subset_table %>%
+  kbl("html", escape = FALSE) %>%
+  kable_styling(full_width = FALSE) %>%
+  column_spec(1, bold = TRUE) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#0073C2") %>%
+  collapse_rows(columns = 1:3, valign = "top")%>%
+  add_header_above(c(" ", "2021" = 1, "2022" = 1, "2023" = 1, "2021" = 1, "2022" = 1, "2023" = 1, "2021" = 1, "2022" = 1, "2023" = 1  ), bold = TRUE) %>%
+  add_header_above(c("Site" = 1, "ChlA" = 3, "TSS" = 3, "Turbidity" = 3))
+
+ft <- flextable(subset_table)%>%
+  separate_header() %>%
+  align(align = "center", part = "all") %>%
+  autofit()
+
+my_theme <- function(x, ...) {
+    x <- colformat_double(x, big.mark = "'", decimal.mark = ".", digits = 2)
+    x <- set_table_properties(x, layout = "fixed")
+    x <- border_remove(x)
+    std_border <- fp_border_default(width = 1, color = "black")
+    x <- border_outer(x, part="all", border = std_border )
+    x <- border_inner_h(x, border = std_border, part="all")
+    x <- border_inner_v(x, border = std_border, part="all")
+    autofit(x)
+}
+my_theme(ft)
+
+
+# Save the table to a Word document
+save_as_docx(ft, path = "data/table_export.docx")
+
+
+```
+
 
 # Discrete data plots
 
@@ -132,14 +183,90 @@ chla_per_site_year <-tidy_chem%>%
 ```{r}
 source("src/analysis_fxns/build_basic_plot.R")
 
-result_list <- map(all_params, ~build_basic_chem_plot(sites = mainstem_Res_only, param = .x, style = "timeline"))
+result_list <- map(all_params, ~build_basic_chem_plot(sites = mainstem_Res_only, param = .x, style = "boxplots"))
 
 walk(result_list, ~print(.))
 ```
 
 ## Basic Timelines
 ```{r}
+source("src/analysis_fxns/build_basic_plot.R")
 
+result_list <- map(all_params, ~build_basic_chem_plot(sites = mainstem_Res_only, param = .x, style = "timeline"))
+
+#Fire affected params
+param_oi <- c("SC","K", "NH4" , "NO3","PO4")
+param_notitle <- map(param_oi, ~build_basic_chem_plot(sites = mainstem_Res_only, param = .x, style = "timeline",graph_size = 30))
+
+
+DOC <- build_basic_chem_plot(sites = mainstem_Res_only, param = "DOC", style = "timeline",graph_size = 30, title = TRUE)
+
+param_oi_list <- list(DOC, param_notitle)%>%
+  list_flatten()
+
+
+
+
+
+#Seperate in to burn severity trending params and non trending for SI
+ggarrange(plotlist = param_oi_list, ncol = 1)
+ggsave("data/figs_output/2023_figs/DRAFT_res_oi_chem.jpg",width = 25, height = 30, dpi = 300)
+```
+
+
+## Reservoir timeline and dotplot
+Group 2021+ 2022, summarize to monthly for timeline
+
+```{r}
+monthly_res_chla <- filter(most_recent_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
+  select(site_code, Date, ChlA, Year)%>%
+  mutate(month = month(Date, label = TRUE, abbr = TRUE ), 
+         year_breakdown = case_when(
+           Year %in% c(2021, 2022) ~ "2021 & 2022", 
+           Year == 2023 ~ "2023"
+         ))%>%
+  group_by(site_code,year_breakdown, month)%>%
+  summarise(monthly_mean_chla = mean(ChlA))
+  
+chla_sum_timeline <- ggplot(data = monthly_res_chla, aes(x=month, y=monthly_mean_chla, color=site_code, group=site_code)) +
+  geom_line( linewidth=1.5) +
+  geom_point( size=5) +
+  scale_color_manual(values = colorsBS_site_code)+
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept = 8), color='black', linetype="dashed") +
+  labs(x = "Date", y = " Chlorophyll a (μg/L)") +
+  theme_bw(base_size=30) +
+  theme(legend.position = "none")+
+  coord_cartesian(ylim=c(0,12))+
+  facet_wrap(~year_breakdown, scales = "free_x")
+
+
+res_chla <- filter(most_recent_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
+  select(site_code, Date, ChlA, Year)%>%
+  mutate(year_breakdown = case_when(
+           Year %in% c(2021, 2022) ~ "2021 & 2022", 
+           Year == 2023 ~ "2023"
+         ))
+res_chla$site_code <- factor(res_chla$site_code, levels = c("LNGR", "JOER", "CBRR", "PTRR", "BRNR"))
+
+chla_sum_dotplot <- ggplot(data = res_chla, aes(x=site_code,y=ChlA, middle=mean(ChlA))) + 
+   geom_dotplot(aes(fill=site_code), stackgroups = FALSE, binaxis = "y", method = "histodot",stackdir = "center", position = "dodge", binwidth = .3, dotsize = 1.5)+
+  stat_summary(fun = median, geom = "crossbar", position = position_dodge(width = 0.8), width = 0.8, fill = "black") +
+  scale_color_manual(values = colorsBS_site_code)+
+  scale_fill_manual(values = colorsBS_site_code)+
+  geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+  geom_abline(aes(slope=0, intercept = 8), color='black', linetype="dashed") +
+   labs(x = "Site", y = " Chlorophyll a (μg/L)") +
+  theme_bw(base_size=30) +
+  theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank())+
+  coord_cartesian(ylim=c(0,12))+
+  facet_wrap(~year_breakdown, scales = "free_x")
+
+
+ggarrange(chla_sum_timeline, chla_sum_dotplot, ncol = 1)
+ggsave("data/figs_output/2023_figs/DRAFT_res_chla_summary.jpg",width = 20, height = 14, dpi = 300)
 ```
 
 
@@ -251,10 +378,29 @@ source("src/paper_figs/build_long_plot.R")
 ## South Fork filled/empty comparison
 
 ```{r}
-source("src/analysis_fxns/sf_res_impact.R")
+source("src/analysis_fxns/sf_res_impact_plot.R")
 
 sf_plots <- map(.x = all_params, .f = plot_sf_impact)
 walk(sf_plots, plot)
+
+sf_chla <- plot_sf_impact(param = "ChlA")+
+#adding meso and eutrophic levels for cold lakes
+ geom_abline(aes(slope=0, intercept=2.6), color='black', linetype="dashed") +
+    geom_abline(aes(slope=0, intercept=8), color='black', linetype="dashed") +
+    #annotate(geom="text", label= "MDL Limit (μg/L)", x="CBRR 2022", y=.075, vjust= -1)+
+    annotate(geom="text", label= "Mesotrophic", x=.75, y=2.6, vjust= -1, size = 6)+
+    annotate(geom="text", label= "Eutrophic", x= .75, y=8, vjust= -1, size = 6)
+  
+ggsave("data/figs_output/2023_figs/sf_impact.jpg", width = 18, height  = 12, dpi = 300)
+
+chla_sf <- sf_impact_df(param = "ChlA")%>%
+  filter(location == "Reservoir")
+t.test(ChlA ~ filled_status, data = chla_sf)
+
+chla_beav <- sf_impact_df(param = "ChlA")%>%
+  filter(site_code == "BEAV")
+t.test(ChlA ~ filled_status, data = chla_beav)
+
 ```
 
 
@@ -320,7 +466,7 @@ cations_anions <- filter(chem_units, simple %nin% c("Turbidity","TSS","ChlA", "p
 custom_values <- list(
   sites = "all",
   sensor_param = "actual_cond",
-  timestep = "15min",
+  timestep = "1hour",
   matched_axes = FALSE
 )
 
