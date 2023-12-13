@@ -31,13 +31,10 @@ source("src/analysis_fxns/grab_sensor_data.R")
 ```{r}
 tidy_chem <- most_recent_chem%>%
   filter(Year > 2020)%>%
-  left_join(time_data, by = "FCW_Number")%>%
-  mutate(dt = case_when( !is.na(Time) ~ as.POSIXct(paste0(Date," ", Time), format = "%Y-%m-%d %H:%M"), 
-                         TRUE ~ NA), 
-         distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
+  mutate(distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
   left_join(order_table, by = "site_code") 
-#time data and site order now added to tidy chem and thus not needed
-rm(time_data, order_table)
+#site order now added to tidy chem and thus not needed
+rm(order_table)
 
 ```
 ## Run above to get data loaded
@@ -121,7 +118,7 @@ chla_per_site_year <-tidy_chem%>%
 Code to make SI tables for minimum and maximum values 
 ```{r}
 
-yearly_means <- most_recent_chem%>%
+yearly_means <- tidy_chem%>%
   filter(Campaign %nin% c("CLP  Mainstem-Fort Collins","CLP Mainstem-Canyon" )& site_code %nin% c("BMD","PJW","JWC"  ,"PBR","PBD", "PNF","PSF","SFM","SAWM", "LDRT1", "legacy","timberline","ELC","archery","PFAL") & Year >= 2021)%>%
   select(-c("data_source","Lat","Long","location","Campaign","watershed","status","Buffer_Level","Watershed_Level","distance_upstream_km", "FCW_Number"))%>%
   group_by(Year, site_code, Site)%>%
@@ -218,7 +215,7 @@ ggsave("data/figs_output/2023_figs/DRAFT_res_oi_chem.jpg",width = 25, height = 3
 Group 2021+ 2022, summarize to monthly for timeline
 
 ```{r}
-monthly_res_chla <- filter(most_recent_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
+monthly_res_chla <- filter(tidy_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
   select(site_code, Date, ChlA, Year)%>%
   mutate(month = month(Date, label = TRUE, abbr = TRUE ), 
          year_breakdown = case_when(
@@ -241,7 +238,7 @@ chla_sum_timeline <- ggplot(data = monthly_res_chla, aes(x=month, y=monthly_mean
   facet_wrap(~year_breakdown, scales = "free_x")
 
 
-res_chla <- filter(most_recent_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
+res_chla <- filter(tidy_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
   select(site_code, Date, ChlA, Year)%>%
   mutate(year_breakdown = case_when(
            Year %in% c(2021, 2022) ~ "2021 & 2022", 
@@ -300,7 +297,7 @@ chla_dotplot_res <- build_res_dotplot(param = "ChlA")+
     coord_cartesian(ylim=c(0,12))
 
 plot(chla_dotplot_res)
-#ggsave("data/figs_output/2023_figs/res_dotplots_2021_2023.jpg", dpi = 300, width = 18, height = 10)
+ggsave("data/figs_output/2023_figs/res_dotplots_2021_2023.jpg", dpi = 300, width = 18, height = 10)
 
 #check out all parameters
 
@@ -380,8 +377,8 @@ source("src/paper_figs/build_long_plot.R")
 ```{r}
 source("src/analysis_fxns/sf_res_impact_plot.R")
 
-sf_plots <- map(.x = all_params, .f = plot_sf_impact)
-walk(sf_plots, plot)
+# sf_plots <- map(.x = all_params, .f = plot_sf_impact)
+# walk(sf_plots, plot)
 
 sf_chla <- plot_sf_impact(param = "ChlA")+
 #adding meso and eutrophic levels for cold lakes
@@ -394,7 +391,7 @@ sf_chla <- plot_sf_impact(param = "ChlA")+
 ggsave("data/figs_output/2023_figs/sf_impact.jpg", width = 18, height  = 12, dpi = 300)
 
 chla_sf <- sf_impact_df(param = "ChlA")%>%
-  filter(location == "Reservoir")
+  filter(site_code == "SFM")
 t.test(ChlA ~ filled_status, data = chla_sf)
 
 chla_beav <- sf_impact_df(param = "ChlA")%>%
@@ -469,6 +466,10 @@ custom_values <- list(
   timestep = "1hour",
   matched_axes = FALSE
 )
+
+sites_select <- c("CBRI", "PBD", "JOEI", "SFM")
+
+correlate_grab_sonde(sites = "all" , sensor_param = "FDOM", grab_param = "DOC", timestep = "1hour", matched_axes = FALSE)
 
 # Create a partially applied function
 partial_correlate_grab_sonde <- partial(correlate_grab_sonde, !!!custom_values)
