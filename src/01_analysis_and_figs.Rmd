@@ -119,59 +119,93 @@ Code to make SI tables for minimum and maximum values
 ```{r}
 
 yearly_means <- tidy_chem%>%
-  filter(Campaign %nin% c("CLP  Mainstem-Fort Collins","CLP Mainstem-Canyon" )& site_code %nin% c("BMD","PJW","JWC"  ,"PBR","PBD", "PNF","PSF","SFM","SAWM", "LDRT1", "legacy","timberline","ELC","archery","PFAL") & Year >= 2021)%>%
-  select(-c("data_source","Lat","Long","location","Campaign","watershed","status","Buffer_Level","Watershed_Level","distance_upstream_km", "FCW_Number"))%>%
+  filter(Campaign %nin% c("CLP  Mainstem-Fort Collins","CLP Mainstem-Canyon" )& site_code %nin% c("PJW","JWC"  ,"PBR","PBD", "PNF","PSF","SFM","SAWM", "LDRT1", "legacy","timberline","ELC","archery","PFAL", "BEAV") & Year >= 2021)%>%
+  select(-c("data_source","Lat","Long","location","Campaign","watershed","status","Buffer_Level","Watershed_Level","distance_upstream_km", "FCW_Number", "Field_DO_mgL","Field_Cond_µS/cm","Field_Temp_C"))%>%
   group_by(Year, site_code, Site)%>%
   summarise(across(starts_with(all_params), mean, na.rm = TRUE),
             .groups = 'drop')
-
-table_data <- yearly_means %>%
-  pivot_longer(cols = c(Turbidity:SO4), names_to = "Parameter", values_to = "Value") %>%
-  pivot_wider(names_from = Parameter, values_from = Value, names_prefix = paste0(Year, Parameter), values_fill = 0)
+ 
 
 
-
-subset_table <- yearly_means%>%
+  
+  subset_table <- yearly_means%>%
   mutate(Site = paste0(Site, " (", site_code, ")"))%>%
-  select(Site, Year, Turbidity, TSS, ChlA)%>%
-  pivot_longer(cols = c(Turbidity:ChlA), names_to = "Parameter", values_to = "Value")%>%
+    #select(Site, Year, `Chlorophyll a (ug/L)` = ChlA,     `SC (uS/cm)` = SC,    pH,    `DOC (mg/L)` = DOC)%>%
+  #select(Site, Year,`TDN (mg/L)` = DTN,     `NH4 (mg/L)` = NH4,   	`NO3 (mg/L)` = NO3,   `PO4 (mg/L)` = PO4 )%>%
+  #select(Site, Year,`SO4 (mg/L)` = SO4,     `Na (mg/L)` = Na,   	`Ca (mg/L)` = Ca,   `Cl (mg/L)` = Cl )%>%
+  select(Site, Year,`K (mg/L)` = K,     `Mg (mg/L)` = Mg,   	`F (mg/L)` = `F`, TSS)%>%
+    
+  pivot_longer(cols = 
+                   #c(`Chlorophyll a (ug/L)`:`DOC (mg/L)`),
+                  #c(`TDN (mg/L)`:`PO4 (mg/L)`),
+               #c(`SO4 (mg/L)`:`Cl (mg/L)`),
+               c(`K (mg/L)`:TSS),
+               names_to = "Parameter", values_to = "Value")%>%
   pivot_wider(names_from = c(Parameter, Year), values_from = Value, values_fill = 0)%>%
   select(Site, order(colnames(.)))
 
+  subset_table$Site <- factor(subset_table$Site, levels = c("Barnes Meadow Outflow (BMD)", "Barnes Meadow Reservoir (BRNR)", "Chambers Inlet (CBRI)", "Chambers Reservoir (CBRR)", "Chambers Outflow (CHD)", "Joe Wright Inlet (JOEI)", "Joe Wright Reservoir (JOER)", "Comanche Inflow (COMI)",  "Comanche Reservoir (COMR)", "Comanche Outflow (COMO)", "Hourglass Inflow (HORI)", "Hourglass Reservoir (HORR)", "Hourglass Outflow (HORO)","Long Draw Outlet (LNGO)","Long Draw Reservoir (LNGR)","Peterson Outlet (PTRO)", "Peterson Reservoir (PTRR)"     ))
+
+  #create standard border color and width
+  std_border <- fp_border_default(width = 1, color = "black")
   
-
-table <- subset_table %>%
-  kbl("html", escape = FALSE) %>%
-  kable_styling(full_width = FALSE) %>%
-  column_spec(1, bold = TRUE) %>%
-  row_spec(0, bold = TRUE, color = "white", background = "#0073C2") %>%
-  collapse_rows(columns = 1:3, valign = "top")%>%
-  add_header_above(c(" ", "2021" = 1, "2022" = 1, "2023" = 1, "2021" = 1, "2022" = 1, "2023" = 1, "2021" = 1, "2022" = 1, "2023" = 1  ), bold = TRUE) %>%
-  add_header_above(c("Site" = 1, "ChlA" = 3, "TSS" = 3, "Turbidity" = 3))
-
 ft <- flextable(subset_table)%>%
   separate_header() %>%
-  align(align = "center", part = "all") %>%
-  autofit()
+  align(align = "center", part = "all")%>%
+  colformat_double( big.mark = "'", decimal.mark = ".", digits = 2)%>%
+  set_table_properties(layout = "fixed")%>%
+  border_remove()%>%
+  border_outer(part="all", border = std_border )%>%
+  border_inner_h(border = std_border, part="all")%>%
+   border_inner_v(border = std_border, part="all")%>%
+  autofit()%>%
+  italic( j = "Site")%>%
+  fontsize( size = 8, part = "body")
 
-my_theme <- function(x, ...) {
-    x <- colformat_double(x, big.mark = "'", decimal.mark = ".", digits = 2)
-    x <- set_table_properties(x, layout = "fixed")
-    x <- border_remove(x)
-    std_border <- fp_border_default(width = 1, color = "black")
-    x <- border_outer(x, part="all", border = std_border )
-    x <- border_inner_h(x, border = std_border, part="all")
-    x <- border_inner_v(x, border = std_border, part="all")
-    autofit(x)
-}
-my_theme(ft)
+#Highlighting columns other than Site
+# Max is red
+# min is blue
+columns_to_highlight <- names(subset_table) %>%
+  keep(~ !grepl("Site", .))
 
+  for (i in 1:length(columns_to_highlight)) {
+    max_color <- "#CC3311"
+    min_color <- "#0077BB"
+    
+    ft <- color(ft, j = i+1, 
+                    i = ~ subset_table[i+1] == max(subset_table[i+1], na.rm = TRUE), 
+                    color = max_color)
+    
+    ft <- color(ft, j = i+1, 
+                    i = ~ subset_table[i+1] == min(subset_table[i+1], na.rm = TRUE), 
+                    color = min_color)
+  }
+  
+
+ft
+
+  
+  
+
+
+sect_properties <- prop_section(
+  page_size = page_size(
+    orient = "landscape",
+    width = 8.3, height = 11.7
+  ),
+  type = "continuous",
+  page_margins = page_mar()
+)
+
+ft
 
 # Save the table to a Word document
-save_as_docx(ft, path = "data/table_export.docx")
+save_as_docx(ft, path = "data/table_export3.docx", pr_section = sect_properties)
+
 
 
 ```
+
 
 
 # Discrete data plots
