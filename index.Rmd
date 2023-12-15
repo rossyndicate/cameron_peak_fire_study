@@ -2,6 +2,7 @@
 output: html_document
 ---
 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 source("src/00_analysis_setup.R")
@@ -11,7 +12,8 @@ source("src/00_analysis_setup.R")
 
 ```{r}
 #discrete sample data and location metadata from most recent pub
-data_version = "v10.18.23"
+DOI = "10372690"
+data_version = "v12.13.23b"
 source("src/analysis_fxns/grab_zenodo_data.R")
 
 all_params <- chem_units%>%
@@ -21,30 +23,16 @@ source("src/analysis_fxns/grab_sensor_data.R")
 
 ```
 
-## Date/Times not in Zenodo dataset
-
-This will be incorporated into the next data release, until then this is how this data will be added
-
-```{r}
-time_data <- read_csv_arrow("data/field_chemistry/raw//sites_times_data_20231117.csv")%>%
-  mutate(Date = as.Date(Date, format = "%d-%b-%y"), 
-         Year = year(Date))%>%
-  filter(Era == "FCW" & Year >= 2020)%>%
-  select(FCW_Number = EraSamp , Time, Field_DO_mgL, `Field_Cond_µS/cm`, Field_Temp_C)
-```
 
 ## Tidy discrete
 
 ```{r}
 tidy_chem <- most_recent_chem%>%
   filter(Year > 2020)%>%
-  left_join(time_data, by = "FCW_Number")%>%
-  mutate(dt = case_when( !is.na(Time) ~ as.POSIXct(paste0(Date," ", Time), format = "%Y-%m-%d %H:%M"), 
-                         TRUE ~ NA), 
-         distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
+  mutate(distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
   left_join(order_table, by = "site_code") 
-#time data and site order now added to tidy chem and thus not needed
-rm(time_data, order_table)
+#site order now added to tidy chem and thus not needed
+rm(order_table)
 
 ```
 ## Run above to get data loaded
@@ -52,6 +40,7 @@ rm(time_data, order_table)
 ```{r}
 print("Data Successfully loaded for analysis")
 ```
+
 # Map
 
 Things in map
@@ -73,7 +62,7 @@ _ # of samples per year
 ```{r}
 
 
-sample_nums <- most_recent_chem %>%
+sample_nums <- tidy_chem %>%
   # mutate(site_code = case_when(
   #   site_code == "SLEP" ~"PFAL", 
   #   TRUE ~ site_code
@@ -94,11 +83,13 @@ sample_nums <- most_recent_chem %>%
 ### sensors
 ```{r}
 PBR <- tibble(site_code = "PBR",
+              min_date = as.Date("2023-4-20"), 
+              max_date = as.Date("2023-11-13"),
   POR = "2023-4-20 : 2023-11-13",
               sensor_measurements = 13364,
               unique_parameters = "pH, Turbidity, Specific Conductivity, DO, Temperature")
 
-sensor_sites <- sensor_data %>%
+sensor_POR <- sensor_data %>%
   filter(parameter %nin% c("% Saturation O₂","Resistivity", "ORP", "Actual Conductivity" ))%>%
   group_by(site)%>%
   dplyr::summarise(min_date = as.Date(min(timestamp)),
@@ -109,11 +100,21 @@ sensor_sites <- sensor_data %>%
   ungroup()%>%
   mutate(POR = paste0(min_date, " : ", max_date),
          site_code = toupper(site))%>%
-  plyr::rbind.fill(PBR)%>%
+  plyr::rbind.fill(PBR)
+
+matching_counts <- tidy_chem %>%
+  inner_join(sensor_POR, by = "site_code") %>%
+  filter(between(x = Date,  left = min_date, right = max_date)) %>%
+  group_by(site_code) %>%
+  count(name = "Sensor and Grab Matches (2023)")
+
+
+sensor_sites <- sensor_POR%>%
+  left_join(matching_counts, by = "site_code")%>%
   left_join(most_recent_meta, by = "site_code")%>%
   left_join(sample_nums, by = "site_code")%>%
   st_as_sf(coords = c("Long", "Lat"), crs = 4326)%>%
-  select(Site_Name, POR,sensor_measurements, unique_parameters,watershed, `# of samples (2023)`, `# of samples (2021 & 2022)`)
+  select(Site_Name, POR, `# of samples (2023)`,`Sensor and Grab Matches (2023)`,sensor_measurements, unique_parameters,watershed, `# of samples (2021 & 2022)`)
   
 
 mapview::mapview(sensor_sites, layer.name = "Water Quality Sensor Sites",col.regions = "#34b1eb", cex = 8)
@@ -147,7 +148,7 @@ CLP_RS <- read_feather("data/RS/CLP_point_DSWE1_for_analysis_2023-12-08.feather"
 
 RS_match_ups <- tibble()
 for(i in 1:nrow(CLP_RS)){
-  rs_loop <- most_recent_chem%>%
+  rs_loop <- tidy_chem%>%
     filter(site_code == CLP_RS$site_code[i] & Date >= (CLP_RS$RS_date[i] - days(4)) & Date <= (CLP_RS$RS_date[i] + days(4)))%>%
     mutate(RS_date = CLP_RS$RS_date[i])%>%
     rename(grab_date = Date)
@@ -181,7 +182,7 @@ reservoir_sites <- filter(images_overall, Year == 2023)%>%
   st_as_sf(coords = c("Long", "Lat"), crs = 4326)%>%
 
   select(Site_Name, `2023 Grab and RS Matches (within 4 days)` = `Grab and RS Matches (within 4 days)`,
-         `2023 RS Images` = `RS Images`,`RS Images (2021 and 2022)`, `# of samples (2023)`, `Grab and RS Matches (2021 and 2022)`, `# of samples (2021 & 2022)`)
+         `2023 RS Images` = `RS Images`, `# of samples (2023)`, `Grab and RS Matches (2021 and 2022)`,`RS Images (2021 and 2022)`, `# of samples (2021 & 2022)`)
 
 mapview::mapview(reservoir_sites, layer.name = "Reservoir Sites",col.regions = "#009E73", cex = 8)+
 mapview::mapview(sensor_sites, layer.name = "Water Quality Sensor Sites",col.regions = "#34b1eb", cex = 8)
@@ -193,10 +194,10 @@ mapview::mapview(sensor_sites, layer.name = "Water Quality Sensor Sites",col.reg
 all the sites we sample with no sensor and no RS
 
 ```{r}
-  add_sampling <- filter(most_recent_meta, Campaign %in% c("Mainstem","South Fork","Chambers Complex","Longdraw" )& site_code %nin% unique(CLP_RS$site_code) & site_code %nin% c("JOEI", "CBRI", "PBR",  "CHD","LRT",  "SFM", "PBD", "SLEP")& watershed != "CLP  Mainstem-Fort Collins" )%>%
+  add_sampling <- filter(tidy_chem, Campaign %in% c("Mainstem","South Fork","Chambers Complex","Longdraw" )& site_code %nin% unique(CLP_RS$site_code) & site_code %nin% c("JOEI", "CBRI", "PBR",  "CHD","LRT",  "SFM", "PBD", "SLEP")& watershed != "CLP  Mainstem-Fort Collins" )%>%
   left_join(sample_nums, by = "site_code")%>%
   st_as_sf(coords = c("Long", "Lat"), crs = 4326)%>%
-  select(Site_Name, `# of samples (2023)`, `# of samples (2021 & 2022)`, watershed)
+  select(Site, `# of samples (2023)`, `# of samples (2021 & 2022)`, watershed)
 
 Manners_bridge <- tibble(Site_Name = "Manner's Bridge WQ",
   POR = "2023-3-23 : 2023-11-13",

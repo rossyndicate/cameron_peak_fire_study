@@ -17,7 +17,7 @@ pack_req <- c(
   #spatial packages
   "sf","terra","nhdplusTools", "tigris","raster", "leaflet","tmap",
   # plotting
-  "ggpubr","ggthemes","scales","corrplot","gghighlight", "geomtextpath", "ggbeeswarm","plotly", "ggpmisc",
+  "ggpubr","ggthemes","scales","corrplot","gghighlight", "geomtextpath", "ggbeeswarm","plotly", "ggpmisc","flextable",
   # web scrapping
   "rjson", "rvest", "dataRetrieval", "httr", "jsonlite",
   #extra
