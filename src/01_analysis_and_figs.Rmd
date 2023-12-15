@@ -31,10 +31,15 @@ source("src/analysis_fxns/grab_sensor_data.R")
 ```{r}
 tidy_chem <- most_recent_chem%>%
   filter(Year > 2020)%>%
-  mutate(distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
+  mutate(distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km), 
+         
+          dt = case_when(is.na(Time) ~ NA, 
+                        TRUE ~ as.POSIXct(paste0(Date, " ", Time), format = "%m/%d/%y %H:%M")))%>%
   left_join(order_table, by = "site_code") 
 #site order now added to tidy chem and thus not needed
 rm(order_table)
+
+
 
 ```
 ## Run above to get data loaded
@@ -214,9 +219,33 @@ save_as_docx(ft, path = "data/table_export3.docx", pr_section = sect_properties)
 ```{r}
 source("src/analysis_fxns/build_basic_plot.R")
 
-result_list <- map(all_params, ~build_basic_chem_plot(sites = mainstem_Res_only, param = .x, style = "boxplots"))
+all_res_sites <- c("LNGR", "JOER","COMR", "HORR",  "CBRR", "PTRR", "BRNR")
 
-walk(result_list, ~print(.))
+
+#Plot 1
+title_1 <- "ChlA"
+title_1 <- build_basic_chem_plot(sites = all_res_sites, style = "boxplot", graph_size = 25, param = title_1, title = TRUE)
+param_oi_1 <- c("DOC", "DTN", "pH", "K","NH4","NO3","PO4")
+param_notitle1 <- map(param_oi_1, ~build_basic_chem_plot(sites = all_res_sites, param = .x, style = "boxplot", graph_size = 25))
+list1 <- list(title_1, param_notitle1)%>%
+  list_flatten()
+
+ggarrange(plotlist = list1, ncol = 1)
+ggsave(filename = "data/figs_output/2023_figs/res_chem_boxplots1.jpg",width = 24, height = 30, dpi = 300)
+
+
+
+
+#Plot 2
+title_2 <- "ANC"
+title_2 <- build_basic_chem_plot(sites = all_res_sites, style = "boxplot", graph_size = 25, param = title_2, title = TRUE)
+param_oi_2 <- c("SC" ,"Na", "Mg","Ca", "F","Cl","SO4")
+param_notitle2 <- map(param_oi_2, ~build_basic_chem_plot(sites = all_res_sites, param = .x, style = "boxplot", graph_size = 25))
+list2 <- list(title_2, param_notitle2)%>%
+  list_flatten()
+
+ggarrange(plotlist = list2, ncol = 1)
+ggsave(filename = "data/figs_output/2023_figs/res_chem_boxplots2.jpg",width = 24, height = 30, dpi = 300)
 ```
 
 ## Basic Timelines
@@ -440,7 +469,7 @@ t.test(ChlA ~ filled_status, data = chla_beav)
 This section works but am waiting on grab sample data from RMRS to make correlation plots between grab sample and lab data
 ## Time series sensor data
 ```{r}
-source("src/paper_figs/build_ts_plot.R")
+source("src/analysis_fxns/build_ts_plot.R")
 
 # sites <- c("JOEI", "CBRI", "CHD")
 # param_oi <- filter(sensor_meta, sensor_meta$key_param == TRUE)%>%
@@ -450,13 +479,14 @@ source("src/paper_figs/build_ts_plot.R")
 # 
 # # Use pmap to apply the function to each combination
 # plots_list <- pmap(combinations, build_ts_plot)
-# 
-#       chd_chla <- build_ts_plot(site_name = "chd", param = "chla", color = "#00946c")+
-#       theme(axis.title.x = element_blank(), axis.title.y = element_blank())+
-#         labs(title = "Chambers Outflow")
-#   chd_depth <-build_ts_plot(site_name = "chd",param = "depth",  color = "#0072B2")+
-#     theme(axis.title.y = element_blank())
-# 
+
+      chd_chla <- build_ts_plot(site_name = "chd", param = "chla", color = "#00946c", grabs = TRUE)+
+       theme(axis.title.x = element_blank())+
+         labs(title = "Site: Chambers Outflow (CHD)")
+   chd_depth <-build_ts_plot(site_name = "chd",param = "depth",  color = "#0072B2", grabs = TRUE)
+   ggarrange(chd_chla,chd_depth,  nrow = 2, ncol = 1)
+   ggsave(filename = "data/figs_output/2023_figs/chla_depth_chd.jpg", width = 12, height = 10,  dpi = 300)
+   
 #     cbri_chla <- build_ts_plot(site_name = "cbri", param = "chla", color = "#00946c")+
 #      theme(axis.title.x = element_blank())+
 #       labs(title = "Joe Wright Outflow/Chambers Inflow")
