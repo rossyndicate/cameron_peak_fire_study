@@ -216,4 +216,53 @@ mapview::mapview(sensor_sites, layer.name = "Sampled Water Quality Sensor Sites"
 ```
 
 
+# Map for funder report
+
+```{r}
+sites <- most_recent_meta%>%
+  select(site_code, Lat, Long)%>%
+  filter(site_code %in% c(
+    #Reservoirs
+    "JOEI", "JOER", "CBRI",  "CBRR", "CHD", "BRNR", "PTRR", "LNGR", "COMR", "HORR",
+    #Mainstem
+      "JWC", "PJW", "PFAL", "PBR", "SFM", "PSF", "PNF", "PBD",
+    # Trib
+    "NJOE", "ROAR", "LRT", "SHEP", "BLAK", "FISH", "BEAV", "BENN", "PENN")
+  )%>%
+  mutate( map_2021_2022  = case_when(
+    site_code %in% c("JOEI", "JOER", "CBRI",  "CBRR", "CHD", "BRNR", "PTRR", "LNGR") ~ "weekly", 
+    site_code %in% c("JWC", "PJW", "PFAL", "PBR", "SFM", "PSF", "PNF", "PBD") ~ "bi-weekly", 
+    site_code %in% c("COMR", "HORR") ~ "monthly", 
+    site_code %in% c("NJOE", "ROAR", "LRT", "SHEP", "BLAK", "FISH", "BEAV", "BENN", "PENN") ~ "trib"
+  ), 
+   map_2023  = case_when(
+    site_code %in% c( "JOER",  "CBRR", "BRNR", "PTRR", "LNGR", "JWC", "PJW", "PBR", "PSF", "PNF", "COMR", "HORR", "BEAV") ~ "bi and monthly", 
+    site_code %in% c("JOEI", "CBRI", "CHD","PFAL", "SFM", "PBD" ) ~ "sensor",
+    site_code %in% c("NJOE", "ROAR", "LRT", "SHEP", "BLAK", "FISH", "BENN", "PENN") ~ "trib"
+  ))%>%
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)
+
+map <- mapview::mapview(filter(sites, map_2021_2022 == "trib"), layer.name = "trib",col.regions = "#999999", cex = 6, alpha =1)+ mapview::mapview(filter(sites, map_2021_2022 == "weekly"), layer.name =  "weekly",col.regions = "#ff0303", cex = 10, alpha = 1 )+
+       mapview::mapview(filter(sites, map_2021_2022 == "bi-weekly" ), layer.name = "biweek",col.regions = "#03ffff", cex = 10,alpha = 1)+
+       mapview::mapview(filter(sites, map_2021_2022 == "monthly"), layer.name = "comr",col.regions = "#184dff", cex = 10,alpha = 1)
+       
+map
+
+
+map <- mapview::mapview(filter(sites, map_2023 == "trib"), layer.name = "trib",col.regions = "#999999", cex = 5, alpha =1)+
+  mapview::mapview(filter(sites, map_2023 == "bi and monthly" ), layer.name = "biweek",col.regions = "#03ffff", cex = 9,alpha = 1)+ mapview::mapview(filter(sites, map_2023 == "sensor"), layer.name =  "weekly",col.regions = "#ff0303", cex = 10, alpha = 1 )
+       
+       
+map
+
+```
+
+
+
+
+
+
+
+
+
 
