@@ -39,8 +39,6 @@ tidy_chem <- most_recent_chem%>%
 #site order now added to tidy chem and thus not needed
 rm(order_table)
 
-
-
 ```
 ## Run above to get data loaded
 
@@ -190,9 +188,6 @@ columns_to_highlight <- names(subset_table) %>%
 ft
 
   
-  
-
-
 sect_properties <- prop_section(
   page_size = page_size(
     orient = "landscape",
@@ -450,8 +445,25 @@ sf_chla <- plot_sf_impact(param = "ChlA")+
     #annotate(geom="text", label= "MDL Limit (μg/L)", x="CBRR 2022", y=.075, vjust= -1)+
     annotate(geom="text", label= "Mesotrophic", x=.75, y=2.6, vjust= -1, size = 6)+
     annotate(geom="text", label= "Eutrophic", x= .75, y=8, vjust= -1, size = 6)
+
+sf_no3 <- plot_sf_impact(param = "NO3")
+sf_no3
+sf_k <- plot_sf_impact(param = "K")
+sf_k
   
+  
+
 ggsave("data/figs_output/2023_figs/sf_impact.jpg", width = 18, height  = 12, dpi = 300)
+
+
+
+sf_DTN<- plot_sf_impact(param = "DTN")
+sf_DTN
+
+
+no3_sf <- sf_impact_df(param = "NO3")%>%
+  filter(location %in% c("Reservoir"))
+t.test(NO3 ~ filled_status, data = no3_sf)
 
 chla_sf <- sf_impact_df(param = "ChlA")%>%
   filter(site_code == "SFM")
