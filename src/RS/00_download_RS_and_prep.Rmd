@@ -31,10 +31,12 @@ invisible(lapply(packages, package_loader))
 rs_dir <- "data/RS/"
 # and to spatial directory
 spat_dir <- "data/spatial/all_study_waterbodies/"
-dump <- "~/Desktop/clp_rs/"
 ```
 
 # Purpose
+
+This script just grabs the RS data specific to the CPF project and collates a new
+file with the 7 reservoirs we care about.
 
 ## Download CLP data from Drive
 
@@ -63,25 +65,30 @@ Drive folder.
 
 ## Load all data and prep for project
 
-Here, we'll just load in the feather files we just downloaded.
+Here, we'll just load in the feather file for CLP data we just downloaded.
 
 ```{r}
 clp_rs <- read_feather(file.path(rs_dir, "CLP_point_DSWE1_for_analysis_2023-12-08.feather"))
-ross_clp_rs <- read_feather(file.path(rs_dir, "ROSS_CLP_point_DSWE1_for_analysis_2023-12-08.feather"))
 ```
 
 And then we'll subset the CLP RS dataset for the 7 CLP study lakes, Comanche and
-Hourglass weren't in the ROSS subeset. 
+Hourglass weren't in the ROSS subset, using the shapefile of CPF waterbodies.
 
 ```{r}
+# load spatial data
 clp_spat <- read_sf(file.path(spat_dir, "cpf_waterbodies.shp")) %>% 
   rename(GNIS_Name = gnis_nm)
 
+# drop geo, just keep GNIS name
 clp_list <- clp_spat %>% 
   st_drop_geometry() %>% 
   select(GNIS_Name)
 
+# left join clp list with rs data
 clp_rs <- left_join(clp_list, clp_rs)
+
+# loopy check
+unique(clp_rs$GNIS_Name)
 ```
 
 ## Save that file for next steps
