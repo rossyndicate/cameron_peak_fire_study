@@ -1,0 +1,100 @@
+---
+title: "Download and Prepare Upper CLP Remote Sensing Data"
+author: "ROSSyndicate"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, error = FALSE)
+
+# list packages for script
+packages <- c("tidyverse",
+              "googledrive",
+              "feather",
+              "sf")
+
+# load package loader/installer
+package_loader <- function(x) {
+    if (x %in% installed.packages()) {
+      library(x, character.only = TRUE) 
+    } else {
+      install.packages(x)
+      library(x, character.only = TRUE)
+    }
+}
+
+# use base-r to apply package loader to package list
+invisible(lapply(packages, package_loader))
+
+# point to rs data directory
+rs_dir <- "data/RS/"
+# and to spatial directory
+spat_dir <- "data/spatial/all_study_waterbodies/"
+```
+
+# Purpose
+
+This script just grabs the RS data specific to the CPF project and collates a new
+file with the 7 reservoirs we care about.
+
+## Download CLP data from Drive
+
+There are two CLP files in the Drive, we'll grab them both, even though this workflow
+will only use the subset of CLP data which contains the 7 study lakes. I'm getting
+{curl} errors with this, so I'm just adding to the RS folder manually from the 
+Drive folder. 
+
+```{r}
+# drive_auth("therossyndicate@gmail.com")
+# 
+# # get list of Drive files
+# files <- drive_ls(path = "NW_CLP_for_analysis", pattern = ".feather")
+# 
+# # and subset for the CLP files
+# files <- files[grepl("CLP", files$name), ]
+# 
+# # and download to the rs_dir
+# download <- function(filename, dump_path) {
+#   drive_download(file = filename, path = dump_path, overwrite = T)
+# }
+# 
+# map2(files$name, rs_dir, download)
+```
+
+
+## Load all data and prep for project
+
+Here, we'll just load in the feather file for CLP data we just downloaded.
+
+```{r}
+clp_rs <- read_feather(file.path(rs_dir, "CLP_point_DSWE1_for_analysis_2023-12-08.feather"))
+```
+
+And then we'll subset the CLP RS dataset for the 7 CLP study lakes, Comanche and
+Hourglass weren't in the ROSS subset, using the shapefile of CPF waterbodies.
+
+```{r}
+# load spatial data
+clp_spat <- read_sf(file.path(spat_dir, "cpf_waterbodies.shp")) %>% 
+  rename(GNIS_Name = gnis_nm)
+
+# drop geo, just keep GNIS name
+clp_list <- clp_spat %>% 
+  st_drop_geometry() %>% 
+  select(GNIS_Name)
+
+# left join clp list with rs data
+clp_rs <- left_join(clp_list, clp_rs)
+
+# loopy check
+unique(clp_rs$GNIS_Name)
+length(unique(rs_jun_sep$COMID)) #just in case there are any with same name in dataset
+```
+
+## Save that file for next steps
+
+```{r}
+write_feather(clp_rs, file.path(rs_dir, "CPF_subset_DSWE1_RS_2023-12-08.feather"))
+```
+
