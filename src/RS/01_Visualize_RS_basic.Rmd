@@ -1,0 +1,170 @@
+---
+title: "Visualize RS temperature"
+author: "ROSSyndicate"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Purpose
+
+This script pulls in the data created in "00_download_RS_and_prep.Rmd", passes some
+very high-level QAQC, then visualizes temperature and some of the band data as a
+proxy for clarity.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, error = FALSE)
+
+# list packages for script
+packages <- c("tidyverse",
+              "ggthemes",
+              "feather")
+
+# load package loader/installer
+package_loader <- function(x) {
+    if (x %in% installed.packages()) {
+      library(x, character.only = TRUE) 
+    } else {
+      install.packages(x)
+      library(x, character.only = TRUE)
+    }
+}
+
+# use base-r to apply package loader to package list
+invisible(lapply(packages, package_loader))
+
+# point to rs data directory
+rs_dir <- "data/RS/"
+
+
+# basic theme for all ggplots
+ROSS_theme = theme_bw() + #or theme_few()
+    theme(plot.title = element_text(hjust = 0.5, face = 'bold', size = 24),
+          axis.title = element_text(hjust = 0.5, size = 16),
+          strip.text = element_text(size = 16)) 
+
+```
+
+## Load data and high-level QAQC
+
+Read in the file created in "00_download..."
+
+```{r}
+rs <- read_feather(file.path(rs_dir, "CPF_subset_DSWE1_RS_2023-12-08.feather")) %>% 
+  mutate(surf_temp_degC = med_SurfaceTemp - 273.15) %>%  #convert from Kelvin
+  filter(pCount_dswe1 > 10) # filter for rs data with at least 10 dswe1 pixels
+
+# filter Jun-Sep
+rs_jun_sep <- rs %>% 
+  filter(between(month(date), 6, 9)) %>% 
+  # and where the pixel-specific cloud proportion is 0
+  # the thermal band is very sensitive to clouds, even when they are adjacent
+  # to masked pixels.
+  filter(prop_clouds == 0) %>% 
+  mutate(GNIS_Name = str_replace(GNIS_Name, "Lake", "Reservoir"))
+```
+
+To cohere with CPF color, we'll pull in the color scale and add in the two unburned
+reservoirs as green:
+
+```{r}
+#Color for waterbodies, matches burn severity
+res_colors <- c("Barnes Meadow Reservoir" = "#D55E00", 
+                "Peterson Reservoir" ="#E69F00", 
+                "Chambers Reservoir" = "#F0E442", 
+                "Joe Wright Reservoir" = "#56B4E9", 
+                "Long Draw Reservoir" = "#0072B2",
+                "Comanche Reservoir" = "#0072B2",
+                "Hourglass Reservoir" = "#0072B2")
+
+```
+
+We're also going to factor the names using this burn severity scale:
+
+```{r}
+rs_jun_sep <- rs_jun_sep %>% 
+  mutate(GNIS_Name = factor(GNIS_Name, levels = c("Barnes Meadow Reservoir", 
+                                                  "Peterson Reservoir",
+                                                  "Chambers Reservoir", 
+                                                  "Joe Wright Reservoir",
+                                                  "Long Draw Reservoir",
+                                                  "Comanche Reservoir",
+                                                  "Hourglass Reservoir")))
+```
+
+And visualize the data
+
+```{r}
+ggplot(rs_jun_sep, aes(x = date, y = surf_temp_degC, color = GNIS_Name)) +
+  geom_point() +
+  facet_wrap(~ GNIS_Name, ncol = 3) +
+  scale_color_manual(values = res_colors) +
+  ROSS_theme
+```
+
+There is a scene-level outlier (seen in Barnes and Champbers) - these are from the 
+same scene and there is no other info that would lead us to throw these out, but
+nonetheless, this is suspect. Going to throw out for now.
+
+```{r}
+rs_jun_sep <- rs_jun_sep %>% 
+  filter(system.index != "1_2_LT05_034032_20110608")
+
+ggplot(rs_jun_sep, aes(x = date, y = surf_temp_degC, color = GNIS_Name)) +
+  geom_point() +
+  facet_wrap(~ GNIS_Name, 
+             ncol = 4,
+             labeller = label_wrap_gen(width = 15, multi_line = T)) +
+  scale_color_manual(values = res_colors) +
+  ROSS_theme +
+  theme(legend.position = "none") +
+  labs(x = NULL,
+       y = "Uncorrected Surface Temperature Estimate (deg C)",
+       title = "Remotely-Sensed Surface Temperature at CPF Lakes")
+
+ggsave(file.path(rs_dir, "figs/RS_uncorr_temp_CPF_lakes.png"),
+       height = 8,
+       width = 12,
+       dpi = 300,
+       units = "in")
+
+```
+
+## Plots of relative clarity
+
+Using the measure of Red:Blue as a non-linear proxy, we can estimate clarity as
+a relative measure:
+
+```{r}
+rs_jun_sep_clarity <- rs_jun_sep %>% 
+  # drop any obs where there is a flag for the correction
+  filter(if_all(c(flag_Red_7, flag_Blue_7), ~ . == "")) %>%
+  # create a clarity proxy based on NW matchups
+  mutate(clarity_proxy = med_Red_corr7/med_Blue_corr7) 
+```
+
+and plot with axes to be 'higher clarity' (lower ratio) and 'lower clarity' 
+(higher ratio).
+
+```{r}
+ggplot(rs_jun_sep_clarity, aes(x = date, y = clarity_proxy, color = GNIS_Name)) +
+  geom_point() +
+  facet_wrap(~ GNIS_Name, 
+             ncol = 4,
+             labeller = label_wrap_gen(width = 15, multi_line = T)) +
+  scale_color_manual(values = res_colors) +
+  ROSS_theme +
+  scale_y_continuous(breaks = c(0.5, 2.0), labels = c("higher\nclarity", "lower\nclarity")) +
+  theme(legend.position = "none", 
+        panel.grid = element_line(linewidth = 0),
+        axis.text.y = element_text(size = 14)) +
+  labs(x = NULL,
+       y = "Simple clarity proxy (Red:Blue)",
+       title = "Remotely-Sensed Clarity Proxy at CPF Lakes")
+
+ggsave(file.path(rs_dir, "figs/RS_clarity_proxy_CPF_lakes.png"),
+       height = 8,
+       width = 12,
+       dpi = 300,
+       units = "in")
+```
+
