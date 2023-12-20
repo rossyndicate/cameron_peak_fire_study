@@ -89,6 +89,7 @@ clp_rs <- left_join(clp_list, clp_rs)
 
 # loopy check
 unique(clp_rs$GNIS_Name)
+length(unique(rs_jun_sep$COMID)) #just in case there are any with same name in dataset
 ```
 
 ## Save that file for next steps
