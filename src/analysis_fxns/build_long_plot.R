@@ -1,23 +1,5 @@
 
-#Stuff for testing
 
-choosen_dates_chambers <- as.Date(c(#"2022-06-01",
-  "2022-06-14",
-  #"2022-07-05",
-  "2022-07-26",
-  "2022-08-16",
-  #"2022-08-23",  
-  #"2022-08-30",
-  #"2022-09-06",
-  #"2022-09-13",
-  # "2022-09-20",
-  "2022-09-27",
-  #"2022-10-04",
-  #"2022-10-11",
-  "2022-10-18"
-  #"2022-10-25",
-  #"2022-11-01"
-))
 
 
 build_long_plot <- function(system = "chambers", dates = choosen_dates_chambers ){
@@ -71,7 +53,8 @@ build_long_plot <- function(system = "chambers", dates = choosen_dates_chambers 
     
     chambers_plot
     
-  }if(system == "CLP"){
+  }
+  else if(system == "CLP"){
     
     
     
@@ -139,7 +122,7 @@ build_long_plot <- function(system = "chambers", dates = choosen_dates_chambers 
       xlab("Distance from Canyon Mouth (km)") +
       ylab("Chlorophyll a (μg/L)")
     
-    plot(longitudinal_graph_res_mainstem)
+    #plot(longitudinal_graph_res_mainstem)
     #ggsave("output/longitudinal_res_main_2022.jpg", width = 20, height = 9)
     
     
@@ -150,7 +133,8 @@ build_long_plot <- function(system = "chambers", dates = choosen_dates_chambers 
     
     
     plot(longitudinal_gghighlight_graph_res_mainstem)
-  }if(system == "SF"){
+  }
+  else if(system == "SF"){
     
   }
   
