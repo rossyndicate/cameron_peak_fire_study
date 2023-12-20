@@ -33,12 +33,12 @@ tidy_chem <- most_recent_chem%>%
   filter(Year > 2020)%>%
   mutate(Date = as.Date(Date, "%m/%d/%y"),
     distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km), 
-         
           dt = case_when(is.na(Time) ~ NA, 
-                        TRUE ~ as.POSIXct(paste0(Date, " ", Time), format = "%m/%d/%y %H:%M")))%>%
+                        TRUE ~ as.POSIXct(paste0(Date, " ", Time), format = "%Y-%m-%d %H:%M")))%>%
   left_join(order_table, by = "site_code") 
 #site order now added to tidy chem and thus not needed
-rm(order_table)
+rm(order_table, most_recent_chem)
+
 
 ```
 ## Run above to get data loaded
@@ -721,8 +721,8 @@ custom_values <- list(
 
 sites_select <- c("CBRI", "PBD", "JOEI", "SFM")
 
-correlate_grab_sonde(sites = "all" , sensor_param = "FDOM", grab_param = "DOC", timestep = "1hour", matched_axes = FALSE)
-
+correlate_grab_sonde(sites = "all" , sensor_param = "FDOM", grab_param = "DOC", timestep = "1hour", matched_axes = FALSE)+ theme_bw(base_size = 18)
+ggsave("data/figs_output/2023_figs/fdom_doc_corr.jpg", width = 16, height = 12, dpi = 300)
 # Create a partially applied function
 partial_correlate_grab_sonde <- partial(correlate_grab_sonde, !!!custom_values)
 

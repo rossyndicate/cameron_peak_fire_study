@@ -20,6 +20,11 @@ correlate_grab_sonde <-function(sites = "all", sensor_param = "turb",grab_param 
   param_chosen <- filter(sensor_meta, param_common %in% sensor_param)%>%
     mutate(lab_param = filter(chem_units,  simple %in% grab_param)%>%pull(simple), 
            lab_w_units = filter(chem_units, simple %in% grab_param)%>%pull(combined))
+  #grab nice site name
+  site_names <- filter(most_recent_meta, site_code %in% sonde_sites)%>%
+    mutate(site = tolower(site_code))%>%
+    select(`Site Name` = Site_Name, site)
+  
 rm(sensor_param, grab_param)
   
   if(sites == "all"){
@@ -108,6 +113,8 @@ discrete_filtered <- tidy_chem %>%
         pmap_dfr(., calculate_averages)%>%
         # join with lab data by site and grab dt
         left_join(discrete_filtered, by = c("grab_dt", "site"))%>%
+        #grab nice site name
+        left_join(site_names, by  = "site" )%>%
         #remove NAs
         na.omit()
     
@@ -125,10 +132,10 @@ discrete_filtered <- tidy_chem %>%
       #plot sensor vs grab data
      data_plot <-  discrete_vs_sensor %>%
         ggplot(aes(x = .data[[param_chosen$lab_param]], y = avg_value)) +
-        geom_point(aes(color = site)) +
-        stat_poly_line(se = FALSE) +
+        geom_point(aes(color = `Site Name`), size = 5) +
+        stat_poly_line(se = FALSE, color = "black") +
         stat_poly_eq(use_label(c("eq", "R2"))) +
-        labs(title = paste0("Lab ", param_chosen$lab_param, " vs Sensor ",param_chosen$param_sonde  ),
+        labs(title = paste0("Sensor ",param_chosen$param_sonde, " Vs Lab ", param_chosen$lab_param  ),
               subtitle = paste0("Sensor Timestep: ", timestep),
              x = paste0("Lab: ", param_chosen$lab_w_units),
              y = paste0("Sensor: ", param_chosen$param_w_units)) +
