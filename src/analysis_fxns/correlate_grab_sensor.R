@@ -14,7 +14,7 @@
 # correlate_grab_sonde(sites = "all", sensor_param = "turb", grab_param = "Turbidity", timestep = "15min", matched_axes = FALSE)
 
 
-correlate_grab_sonde <-function(sites = "all", sensor_param = "turb",grab_param = "Turbidity",  timestep = "15min", matched_axes = TRUE){
+correlate_grab_sonde_plot <-function(sites = "all", sensor_param = "turb",grab_param = "Turbidity",  timestep = "15min", matched_axes = TRUE){
   
   #Common name to sensor name
   param_chosen <- filter(sensor_meta, param_common %in% sensor_param)%>%
@@ -29,7 +29,7 @@ rm(sensor_param, grab_param)
   
   if(sites == "all"){
     # filter for the desired parameter for all sites
-    sensor_filtered <- filter(sensor_data, parameter %in% param_chosen$param_sonde )%>%
+    sensor_filtered <- filter(tidy_sensor, parameter %in% param_chosen$param_sonde )%>%
       #using padr, thicken to get all 15 min timedata and then pad (adjust times to 15 min interval)
       thicken(interval = "15 min", by = "timestamp")%>%
       pad(by = "timestamp_15_min", interval = "15 min")%>%
@@ -38,7 +38,7 @@ rm(sensor_param, grab_param)
     
   }else if(tolower(sites) %in% tolower(sonde_sites)){
     # filter for the desired parameter for selected sites
-    sensor_filtered <- filter(sensor_data, parameter %in% param_chosen$param_sonde & site %in% tolower(sites))%>%
+    sensor_filtered <- filter(tidy_sensor, parameter %in% param_chosen$param_sonde & site %in% tolower(sites))%>%
       #using padr, thicken to get all 15 min timedata and then pad (adjust times to 15 min interval)
       thicken(interval = "15 min", by = "timestamp")%>%
       pad(by = "timestamp_15_min", interval = "15 min")%>%
@@ -158,3 +158,107 @@ discrete_filtered <- tidy_chem %>%
 
 #test function
 #correlate_grab_sonde(sites = "all", sensor_param = "spec_cond", grab_param = "SC", timestep = "15min", matched_axes = FALSE)
+
+
+
+
+correlate_grab_sonde_df <- function(timestep = "1hour"){
+  
+  wide_sensor_data <- tidy_sensor%>%
+    thicken(interval = "15 min", by = "timestamp")%>%
+    pad(by = "timestamp_15_min", interval = "15 min")%>%
+    group_by(site, timestamp_15_min, parameter) %>%
+    summarize(mean = as.numeric(mean(value, na.rm = T)),
+              #diff = abs(min(value, na.rm = T) - max(value, na.rm = T)),
+              n_obs = n()) %>%
+    ungroup()%>%
+    #only select needed data
+    select(site, dt = timestamp_15_min, sensor_value = mean, parameter, n_obs)%>%
+    filter(!is.na(parameter))%>%
+    #change turb and ph since the lab values are are same name
+    mutate(parameter = case_when(parameter == "Turbidity" ~ "Turbidity_Sensor", 
+                                 parameter == "pH" ~ "pH_sensor",
+                                 TRUE ~ parameter))%>%
+    # pivot wider
+    pivot_wider(names_from = parameter, values_from = sensor_value, id_cols = c(dt, site))
+  
+  discrete_filtered <- tidy_chem %>%
+    #grab only sonde sites
+    filter(tolower(site_code) %in% unique(wide_sensor_data$site))%>%
+    filter(!is.na(dt))%>%
+    filter(dt >= min(wide_sensor_data$dt))%>%
+    mutate(site= tolower(site_code),
+           dt_round = round_date(dt, "15 minutes"))%>%
+    rename(grab_dt = dt_round)%>%
+    # grab site, dt and selected parameter (GRAB PARAM)
+    select(site,grab_dt, Turbidity:SO4, Field_DO_mgL,`Field_Cond_µS/cm`,Field_Temp_C )
+  
+  
+  calculate_averages <- function( grab_dt, site_select) {
+    # convert to date to filter sensor data to only data on same date as sample
+    grab_date = as.Date(grab_dt, tz = "MST")
+    
+    #if timestep is hour then grab hour of data (4 points) after site visit
+    if(timestep == "1hour"){
+     wide_sensor_data %>%
+        #create date for match up
+        mutate(date = as.Date(dt, tz = "MST")) %>%
+        filter(grepl(site_select, site, ignore.case = TRUE) & date == grab_date & dt > grab_dt )%>%
+        dplyr::arrange(dt)%>%
+        # grab the data 4 data points after a site visit
+        dplyr::slice_head(n = 4)%>%
+       # take the median of all sensor values
+       summarise_if(is.numeric, median, na.rm = TRUE)%>%
+       #add site and grab_dt back in
+       mutate(site = site_select, grab_dt = grab_dt)
+      
+    }#if timestep is 15min then grab 1 data after site visit
+    else if(timestep == "15min"){
+      wide_sensor_data %>%
+        #create date for match up
+        mutate(date = as.Date(dt, tz = "MST")) %>%
+        filter(grepl(site_select, site, ignore.case = TRUE) & date == grab_date & dt > grab_dt )%>%
+        dplyr::arrange(dt)%>%
+        # grab the data 4 data points after a site visit
+        dplyr::slice_head(n = 1)%>%
+        # take the median of all sensor values
+        summarise_if(is.numeric, median, na.rm = TRUE)%>%
+        #add site and grab_dt back in
+        mutate(site = site_select, grab_dt = grab_dt)
+      
+    } #if timestep is 1day then grab all the data from that day
+    else if(timestep == "1day"){
+      
+      wide_sensor_data %>%
+        #create date for match up
+        mutate(date = as.Date(dt, tz = "MST")) %>%
+        filter(grepl(site_select, site, ignore.case = TRUE) & date == grab_date)%>%
+        dplyr::arrange(dt)%>%
+        # take the median of all sensor values
+        summarise_if(is.numeric, median, na.rm = TRUE)%>%
+        #add site and grab_dt back in
+        mutate(site = site_select, grab_dt = grab_dt)
+    }
+  }
+  
+  
+  correlated_df <- discrete_filtered%>%
+    #grab only dt and site from discrete samples for calculate avg fucn
+    select(grab_dt, site_select = site)%>%
+    # map over calc avg fucn
+    pmap_dfr(., calculate_averages)%>%
+    filter(rowSums(!is.na(select(., -grab_dt, -site))) > 0)%>%
+    # join with lab data by site and grab dt
+    left_join(discrete_filtered, by = c("grab_dt", "site"))
+  
+    #grab nice site name
+    #left_join(site_names, by  = "site" )%>%
+    #remove NAs
+    #na.omit()
+  
+  
+  return(correlated_df)
+}
+
+#test function
+#hourly_corr <- correlate_grab_sonde_df(timestep = "1hour")
