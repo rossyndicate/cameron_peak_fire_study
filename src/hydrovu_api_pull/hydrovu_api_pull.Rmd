@@ -29,8 +29,8 @@ library(tidyverse)
 library(lubridate)
 
 
-source("src/paper_figs/api_pull/hv_getdata_id.R")
-source("src/paper_figs/api_pull/hv_locations_all.R")
+source("src/hydrovu_api_pull/hv_getdata_id.R")
+source("src/hydrovu_api_pull/hv_locations_all.R")
 ```
 
 ## Accessing the API
@@ -38,7 +38,7 @@ source("src/paper_figs/api_pull/hv_locations_all.R")
 First thing, we're going to read in our client id and client secret for accessing the HydroVu API. Don't print these out in this chunk: if you save your Rmd file with the chunk history, that's another way that the world can see your data. 🙃
 
 ```{r}
-creds = yaml::read_yaml("src/paper_figs/api_pull/credentials.yml")
+creds = yaml::read_yaml("src/hydrovu_api_pull/credentials.yml")
 
 client_id = as.character(creds["client"])
 client_secret = as.character(creds["secret"])
@@ -59,13 +59,15 @@ dump_dir <- "data/sensor_data/api/"
 
 
 #... or, manual selection of start/end time
- start <- as.POSIXct("2023-05-01 01:00:00 MDT")
+ start <- as.POSIXct("2023-09-01 01:00:00 MDT")
  end <- Sys.time()
 
-sites <- c("PBD",
-           "JOEI",
-           "CBRI", 
-           "CHD")
+sites <- c("Lincoln St", 
+           "Timberline", 
+           "Prospect", 
+           "Boxelder", 
+           "BoxCreek", 
+           "Archery")
 
 api_puller <- function(site, 
                        dump_dir =  "data/sensor_data/api/", 

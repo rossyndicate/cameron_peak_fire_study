@@ -12,6 +12,7 @@ source("src/00_analysis_setup.R")
 
 # Grab data
 
+###  Chem
 ```{r}
 #discrete sample data and location metadata from most recent pub
 DOI = "10372690"
@@ -20,8 +21,64 @@ source("src/analysis_fxns/grab_zenodo_data.R")
 
 all_params <- chem_units%>%
   pull(simple)
+
+#Lower dataset
+# dwnload_file <- "https://zenodo.org/records/10476232/files/rossyndicate/PWQN_chemistry_data-v2024.1.9b.zip?download=1"
+# download.file(url = dwnload_file, destfile = 'data/ross_lower_poudre.zip') 
+# unzip(exdir = "data/ross_lower_poudre", zipfile = "data/ross_lower_poudre.zip")
+clean_chem_file <- list.files(path = "data/ross_lower_poudre", recursive = TRUE, pattern = ".rds", full.names = TRUE)
+lower_poudre_chem <- readRDS(clean_chem_file)%>%
+  rename("Field_Temp_C" = "Field_Temp", 
+         `Field_Cond_µS/cm` = "Field_Cond", 
+         "Field_DO_mgL" = "Field_DO", 
+         Time = time)%>%
+  select(-Common_name, -Site.Description, -dt_char, -LABNOTES, -lat_long )
+
+```
+
+### Sensor Data
+```{r}
 # sensor data
 source("src/analysis_fxns/grab_sensor_data.R")
+
+tidy_sensor <- sensor_data %>%
+    # remove sites with no useful data
+  filter(name %nin% c("BoxCreek RDO", "Archery_test"))%>%
+  mutate(owner = case_when(grepl("virridy", name, ignore.case = TRUE) ~ "Virridy",
+                           TRUE ~ "ross"))%>%
+  # remove turb sensor at collocated sites
+  filter(!(site == "prospect" & parameter == "Turbidity" & owner == "Virridy") )%>%
+  filter(!(site == "timberline" & parameter == "Turbidity" & owner == "Virridy") )%>%
+  #filter(!(site == "archery" & parameter == "Turbidity" & owner == "Virridy") )%>%
+  # remove spec cond sensor at collocated sites
+  filter(!(site == "prospect" & parameter == "Specific Conductivity" & owner == "Virridy") )%>%
+  filter(!(site == "timberline" & parameter == "Specific Conductivity" & owner == "Virridy") )%>%
+  filter(!(site == "archery" & parameter == "Specific Conductivity" & owner == "Virridy") )%>%
+  # remove actual cond sensor at collocated sites
+  filter(!(site == "prospect" & parameter == "Actual Conductivity" & owner == "Virridy") )%>%
+  filter(!(site == "timberline" & parameter == "Actual Conductivity" & owner == "Virridy") )%>%
+  filter(!(site == "archery" & parameter == "Actual Conductivity" & owner == "Virridy") )%>%
+  # remove salinity sensor at collocated sites
+  filter(!(site == "prospect" & parameter == "Salinity" & owner == "Virridy") )%>%
+  filter(!(site == "timberline" & parameter == "Salinity" & owner == "Virridy") )%>%
+  filter(!(site == "archery" & parameter == "Salinity" & owner == "Virridy") )%>%
+  # remove Resistivity sensor at collocated sites
+  filter(!(site == "prospect" & parameter == "Resistivity" & owner == "Virridy") )%>%
+  filter(!(site == "timberline" & parameter == "Resistivity" & owner == "Virridy") )%>%
+  filter(!(site == "archery" & parameter == "Resistivity" & owner == "Virridy") )%>%
+  # remove temp sensor at collocated sites
+  filter(!(site == "prospect" & parameter == "Temperature" & owner == "Virridy") )%>%
+  filter(!(site == "timberline" & parameter == "Temperature" & owner == "Virridy") )%>%
+  filter(!(site == "archery" & parameter == "Temperature" & owner == "Virridy") )%>%
+  # remove chla sensor at collocated sites
+  filter(!(site == "archery" & parameter == "Chl-a Fluorescence" & owner == "Virridy") )%>%
+  # remove depth at collocated sites
+  filter(!(site == "prospect" & parameter == "Depth" & owner == "Virridy") )%>%
+  filter(!(site == "timberline" & parameter == "Depth" & owner == "Virridy") )%>%
+  filter(!(site == "archery" & parameter == "Depth" & owner == "Virridy") )%>%
+      ungroup()
+
+
 
 ```
 
@@ -31,18 +88,22 @@ source("src/analysis_fxns/grab_sensor_data.R")
 ```{r}
 tidy_chem <- most_recent_chem%>%
   filter(Year > 2020)%>%
-  mutate(distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km), 
-         
+  mutate(Date = as.Date(Date, "%m/%d/%y"),
+    distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km), 
           dt = case_when(is.na(Time) ~ NA, 
-                        TRUE ~ as.POSIXct(paste0(Date, " ", Time), format = "%m/%d/%y %H:%M")))%>%
-  left_join(order_table, by = "site_code") 
-#site order now added to tidy chem and thus not needed
-rm(order_table)
+                        TRUE ~ as.POSIXct(paste0(Date, " ", Time), format = "%Y-%m-%d %H:%M")))%>%
+  left_join(order_table, by = "site_code")%>%
+  bind_rows(lower_poudre_chem)
+
 
 ```
+
+
 ## Run above to get data loaded
 
 ```{r}
+#site order now added to tidy chem and thus not needed
+rm(order_table, most_recent_chem, lower_poudre_chem, clean_chem_file, sensor_data, DOI, dir, data_version)
 print("Data Successfully loaded for analysis")
 ```
 
@@ -283,7 +344,12 @@ monthly_res_chla <- filter(tidy_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA
   group_by(site_code,year_breakdown, month)%>%
   summarise(monthly_mean_chla = mean(ChlA))
   
-chla_sum_timeline <- ggplot(data = monthly_res_chla, aes(x=month, y=monthly_mean_chla, color=site_code, group=site_code)) +
+
+res_chla <- filter(tidy_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
+  select(site_code, Date, ChlA, Year)%>%
+mutate(Date = as.Date(Date, format("%m/%d/%y")))
+
+chla_sum_timeline <- ggplot(data = res_chla, aes(x=Date, y=ChlA, color=site_code, group=site_code)) +
   geom_line( linewidth=1.5) +
   geom_point( size=5) +
   scale_color_manual(values = colorsBS_site_code)+
@@ -293,7 +359,8 @@ chla_sum_timeline <- ggplot(data = monthly_res_chla, aes(x=month, y=monthly_mean
   theme_bw(base_size=30) +
   theme(legend.position = "none")+
   coord_cartesian(ylim=c(0,12))+
-  facet_wrap(~year_breakdown, scales = "free_x")
+  scale_x_date(date_breaks = "months", date_labels = "%b")+
+  facet_wrap(~Year, scales = "free_x")
 
 
 res_chla <- filter(tidy_chem, Year %in% c(2021,2022, 2023) & !is.na(ChlA)& site_code %in% mainstem_Res_only)%>%
@@ -317,11 +384,11 @@ chla_sum_dotplot <- ggplot(data = res_chla, aes(x=site_code,y=ChlA, middle=mean(
             strip.background = element_blank(),
             strip.text.x = element_blank())+
   coord_cartesian(ylim=c(0,12))+
-  facet_wrap(~year_breakdown, scales = "free_x")
+  facet_wrap(~Year, scales = "free_x")
 
 
 ggarrange(chla_sum_timeline, chla_sum_dotplot, ncol = 1)
-ggsave("data/figs_output/2023_figs/DRAFT_res_chla_summary.jpg",width = 20, height = 14, dpi = 300)
+ggsave("data/figs_output/2023_figs/res_chla_dotplot_timeline.jpg",width = 24, height = 14, dpi = 300)
 ```
 
 
@@ -421,13 +488,182 @@ plot(res_ratio_plot)
 Not yet working
 
 ```{r}
-source("src/paper_figs/build_long_plot.R")
+source("src/analysis_fxns/build_long_plot.R")
 
+#Stuff for testing
+
+choosen_dates_chambers <- as.Date(c(#"2022-06-01",
+  "2022-06-14",
+  #"2022-07-05",
+  "2022-07-26",
+  "2022-08-16",
+  #"2022-08-23",  
+  #"2022-08-30",
+  #"2022-09-06",
+  #"2022-09-13",
+  # "2022-09-20",
+  "2022-09-27",
+  #"2022-10-04",
+  #"2022-10-11",
+  "2022-10-18"
+  #"2022-10-25",
+  #"2022-11-01"
+))
+
+chambers_dates_2023 <- c("2023-06-09","2023-06-15", 
+                         "2023-09-05", 
+                         #"2023-09-21", 
+                         "2023-10-05", 
+                         #"2023-10-10", 
+                         "2023-10-16")
+
+
+    #chambers dataframe
+    chambers_longitudinal <- tidy_chem %>%
+      dplyr::filter(!is.na(ChlA)) %>%
+      dplyr::filter(site_code %in% c("JOEI", "JOER", "CBRR", "CBRI", "CHD")) %>%
+      dplyr::filter(Date %in% chambers_dates_2023)%>%
+      mutate(Date=as.character(Date),
+             location_type = ifelse(location == "Outflow"|location =="Inflow", "Stream", "Reservoir"))
+    
+    ###PLOTING PART OF FUNCTION
+    
+    #chla graph
+    chambers_chla_long <- chambers_longitudinal%>%
+      ggplot(aes(x=Distance, y=ChlA, color=Date)) +
+      geom_point( aes(shape = location_type), size=8, alpha = .7) +
+      geom_line(aes(x=Xdistance), size=2, alpha = .7) +
+      geom_point(aes(shape = location_type), size=8, alpha = .7) +
+      scale_color_manual(values = season_color_vals)+
+      scale_fill_manual(values = season_color_vals)+
+      theme_bw(base_size=30) +
+      labs(shape = "", color="") +
+      theme(axis.text.x = element_blank(), 
+            legend.text = element_text(size = 18)) +
+      xlab("") +
+      ylab("Chlorophyll a (μg/L)")
+    
+    #NO3 GRAPH
+    chambers_no3_long <- chambers_longitudinal%>%
+      ggplot(aes(x=Distance, y=NO3, color=Date)) +
+      geom_point( aes(shape = location_type), size=8, alpha = .7) +
+      geom_line(aes(x=Xdistance), size=2, alpha = .7) +
+      geom_point(aes(shape = location_type), size=8, alpha = .7) +
+      scale_color_manual(values = season_color_vals)+
+      scale_fill_manual(values = season_color_vals) +
+      theme_bw(base_size=30) +
+      theme(legend.text = element_text(size =18))+
+      labs(shape = "", color="") +
+      scale_x_discrete(labels=c("1 - JOEI" = "Above Joe Wright", "2 - JOER" = "", "3 - CBRI" = "Above Chambers",
+                                "4 - CBRR" = "", "5 - CHD" = "Below Chambers")) +
+      xlab("Longitudinal Profile") +
+      ylab("NO3 (mg/L)")
+    
+    
+    chambers_plot <- ggarrange(chambers_chla_long,chambers_no3_long, ncol=1, nrow=2, common.legend=T)
+    
+    chambers_plot
+
+ggsave("data/figs_output/2023_figs/jwc_long_2023.jpg", width = 15, height  = 10, dpi = 300)
 
 # 2023 weeks "28" "31" "36"
 #2022 weeks "22","28","32", "38", "42"
 
 ```
+
+## CLP Longitudinal
+
+```{r}
+
+
+    
+    date_df <- tibble( date_col = as.Date(dates), 
+                         wk =  as.character(week(date_col)),
+                        year =as.character(year(date_col)),
+                           wk_year = paste(year, wk), 
+                       date_char = as.character(dates))
+    
+    
+    weeks_select2022 <- filter(date_df, year == 2022)%>%
+      pull(wk)
+    weeks_select2023 <- filter(date_df, year == 2023)%>%
+      pull(wk)
+    week_all <- date_df%>% pull(wk)
+    
+    
+    longitudinal_res_mainstem <- filter(tidy_chem, Year %in% c(2022, 2023)& Date != "2022-09-19")%>%
+      filter ( site_code %in% c("JOEI","JOER","CBRI","CBRR","CHD", "JWC", "SLEP", "PFAL",
+                                "PBR","PSF","PNF","PBD") & !is.na(ChlA))%>%
+      select(site_code,Date, distance_upstream_km, ChlA, NO3, PO4, K, status, location, watershed )%>%
+      mutate(wk = as.character(week(Date)))
+    # %>%
+    #   filter(wk %in% weeks_select2022 )
+    
+    longitudinal_res_mainstem_both <- filter(tidy_chem, Year == "2023")%>%
+      filter ( site_code %in% c("JOEI","JOER","CBRI","CBRR","CHD", "JWC", "SLEP", "PFAL",
+                                "PBR","PSF","PNF","PBD"))%>%
+      select(site_code,Date, watershed, distance_upstream_km, ChlA, NO3, PO4, K, status, location )%>%
+      mutate(wk = as.character(week(Date)))%>%
+      #filter(wk %in% weeks_select2023 )%>%
+        rbind(longitudinal_res_mainstem_2022)%>%
+        mutate(dist_pbd = as.character(distance_upstream_km),
+               site_code  = case_when(site_code == "PFAL" ~ "SLEP", TRUE ~ site_code),
+               type = ifelse(location %in% c("Inflow","Outflow"),"Stream",
+                             ifelse(location == "Reservoir", "Reservoir", "Mainstem")))
+      
+      
+    
+    
+    longitudinal_res_mainstem$wk <- factor(longitudinal_res_mainstem$wk, levels = week_all)
+    longitudinal_res_mainstem$type <- factor(longitudinal_res_mainstem$type, levels = c("Stream", "Reservoir", "Mainstem"))
+    
+    
+    long_clp_monthly <- filter(tidy_chem, !is.na(ChlA)& Year > 2021)%>%
+      filter ( site_code %in% c("JOEI","JOER","CBRI","CBRR","CHD", "JWC", "SLEP", "PFAL",
+                                "PBR","PSF","PNF","PBD"))%>%
+      select(site_code,Date, watershed, distance_upstream_km, ChlA, NO3, status, location, Year )%>%
+      mutate(month = month(Date,label= TRUE,  abbr = TRUE),
+             month_num = month(Date), 
+             dist_pbd = distance_upstream_km,
+             site_code  = case_when(site_code == "PFAL" ~ "SLEP", TRUE ~ site_code),
+             type = ifelse(location %in% c("Inflow","Outflow"),"Stream",
+                             ifelse(location == "Reservoir", "Reservoir", "Mainstem")))%>%
+      filter(month_num > 5 & month_num < 11)%>%
+      group_by(Year, month, site_code, type, dist_pbd)%>%
+      summarise(chla_median = median(ChlA, na.rm = TRUE), 
+                n_samples = n())
+    
+    
+    
+    #graphing
+    
+    long_clp_graph_monthly <- long_clp_monthly%>%
+      ggplot()+
+      geom_point(aes(x = dist_pbd, y= chla_median, shape = type, color = month), alpha = .9, size = 8)+
+      geom_line(aes(x = dist_pbd, y= chla_median, group = month, color =  month), size = 4, alpha = .8)+
+      geom_point(aes(x = dist_pbd, y= chla_median, shape = type, color = month), alpha = .9, size = 8)+
+      #gghighlight(wk == "30", use_direct_label = FALSE )+
+      theme_bw(base_size = 20)+
+      scale_x_reverse()+
+      scale_color_manual(name = "Month: ", values = c("Jun" = "#047E82", "Jul" = "#397534",  "Aug"= '#59B851', "Sep" = '#DEB907', "Oct" = '#FA850E' ))+
+      scale_shape_manual(values=c(17, 16, 15))+
+       scale_fill_manual( values = c("Jun" = "#047E82", "Jul" = "#397534",  "Aug"= '#59B851', "Sep" = '#DEB907', "Oct" = '#FA850E'  ))+
+      # # scale_color_manual(name = "Week of", values = c("6-01" = "#047E82", "7-11" = "#397534", "7-25"='#59B851', "8-08"= '#DEB907' ))+
+      labs(shape = "Site Type", color="", fill ="") +
+      theme(legend.justification = c(.9,.9) , legend.position = c(.9, .9),
+            #legend.box.background  = element_rect(color = "black",size = 1.5),
+            axis.title = element_text(face = "bold"),
+            axis.text.x = element_text(face = "bold"))+
+      #theme(axis.text.x = element_blank()) +
+      xlab("Distance from Canyon Mouth (km)") +
+      ylab("Chlorophyll a (μg/L)")+
+      facet_wrap(~Year, nrow = 2)
+    
+   long_clp_graph_monthly
+    ggsave("data/figs_output/2023_figs/long_clp_monthly.jpg", width = 20, height = 15, dpi = 300)
+
+```
+
 
 
 ## South Fork filled/empty comparison
@@ -533,30 +769,90 @@ source("src/analysis_fxns/build_ts_plot.R")
 ```{r}
 source("src/analysis_fxns/correlate_grab_sensor.R")
 
-cations_anions <- filter(chem_units, simple %nin% c("Turbidity","TSS","ChlA", "pH", "PO4"))%>%pull(simple)
+hourly_corr <- correlate_grab_sonde_df(timestep = "1hour")%>%
+  mutate(campaign = case_when(site %in% c( "lincoln", "timberline", "prospect", "archery", "boxcreek", "boxelder") ~ "lower", 
+                              TRUE ~ "upper"))%>%
+  select(site, grab_dt,campaign, everything())
+inst_corr <- correlate_grab_sonde_df(timestep = "15min")%>%
+  mutate(campaign = case_when(site %in% c( "lincoln", "timberline", "prospect", "archery", "boxcreek", "boxelder") ~ "lower", 
+                              TRUE ~ "upper"))%>%
+  select(site, grab_dt,campaign, everything())
+daily_corr <- correlate_grab_sonde_df(timestep = "1day")%>%
+  mutate(campaign = case_when(site %in% c( "lincoln", "timberline", "prospect", "archery", "boxcreek", "boxelder") ~ "lower", 
+                              TRUE ~ "upper"))%>%
+  select(site, grab_dt,campaign, everything())
 
-# Set custom values for sites, sensor_param, timestep, and matched_axes
-custom_values <- list(
-  sites = "all",
-  sensor_param = "actual_cond",
-  timestep = "1hour",
-  matched_axes = FALSE
-)
+hourly_corr$site = factor(hourly_corr$site, levels = c("joei", "cbri", "chd", "sfm", "pbd", "lincoln", "timberline", "prospect", "boxelder", "boxcreek", "archery"))
+inst_corr$site = factor(inst_corr$site, levels = c("joei", "cbri", "chd", "sfm", "pbd", "lincoln", "timberline", "prospect", "boxelder", "boxcreek", "archery"))
+daily_corr$site = factor(daily_corr$site, levels = c("joei", "cbri", "chd", "sfm", "pbd", "lincoln", "timberline", "prospect", "boxelder", "boxcreek", "archery"))
+inst_corr$campaign = factor(inst_corr$campaign, levels = c("upper", "lower"))
+hourly_corr$campaign = factor(hourly_corr$campaign, levels = c("upper", "lower"))
+daily_corr$campaign = factor(daily_corr$campaign, levels = c("upper", "lower"))
 
-sites_select <- c("CBRI", "PBD", "JOEI", "SFM")
+```
 
-correlate_grab_sonde(sites = "all" , sensor_param = "FDOM", grab_param = "DOC", timestep = "1hour", matched_axes = FALSE)
+## Plot all data
+### Function
+```{r}
 
-# Create a partially applied function
-partial_correlate_grab_sonde <- partial(correlate_grab_sonde, !!!custom_values)
+or_colors <-c( "#01377D", "#009DD1", "#97E7F5", "#7ED348", "#26B170", "#F5E15A", "#F4BE1D", "#FEA305", "#F26021", "purple")
 
-# Map over the vector
-sonde_vs_lab <- map(cations_anions, ~ partial_correlate_grab_sonde(grab_param = .x))
+sensor_params <- sensor_meta%>%
+  filter(key_param == TRUE)%>%
+  mutate(param_sonde = case_when(param_sonde == "Turbidity" ~ "Turbidity_Sensor", 
+                                 param_sonde == "pH" ~ "pH_sensor",
+                                 TRUE ~ param_sonde))%>%
+  pull(param_sonde)
 
-#example function
-# correlate_grab_sonde(sites = "all", sensor_param = "spec_cond", grab_param = "Turbidity", timestep = "15min", matched_axes = FALSE)
+all_combos <- crossing(chem_units$simple, sensor_params)%>%
+  rename(lab_param = `chem_units$simple`,
+         sensor_param = sensor_params)
 
-walk(sonde_vs_lab, ~print(.))
+plot_corr <- function(data, lab_param, sensor_param, matched_axes = FALSE, basesize = 28){
+  
+  
+  plot <- data %>%
+  ggplot(aes(x = .data[[lab_param]], y = .data[[sensor_param]]))+
+  geom_point(aes(color = site, shape = campaign), size = 4)+
+  #geom_smooth(method = "loess")+
+  scale_color_manual(name = "Site", values = or_colors) +
+  labs(x = paste0("Lab ", lab_param), y = paste0("Sensor ", sensor_param), shape = "Network")+
+  # fix x axis to 7  to 9
+  #xlim(0,3000)+
+  # fix y axis to 7 to 9
+  #ylim(0,3000)+
+  #facet_wrap(~campaign, scales = "fixed")+
+  theme_bw(base_size = basesize)
+  # add one to one line
+  
+  if(matched_axes == TRUE){
+    plot <- plot + geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed")
+  }
+  
+  return(plot)
+  
+}
+
+```
+
+## Generate plots
+```{r}
+
+hourly_corr_plots <- map2(all_combos$lab_param, all_combos$sensor_param, ~plot_corr(hourly_corr, .x, .y))%>%
+  set_names(paste0(all_combos$lab_param, "_", all_combos$sensor_param))
+daily_corr_plots <- map2(all_combos$lab_param, all_combos$sensor_param, ~plot_corr(daily_corr, .x, .y))%>%
+  set_names(paste0(all_combos$lab_param, "_", all_combos$sensor_param))
+
+```
+## write datasets
+
+```{r}
+
+writexl::write_xlsx(x = hourly_corr, path = "data/sensor_data/correlations/hourly_corr.xlsx")
+writexl::write_xlsx(x = daily_corr, path = "data/sensor_data/correlations/daily_corr.xlsx")
+writexl::write_xlsx(x = inst_corr, path = "data/sensor_data/correlations/inst_corr.xlsx")
+writexl::write_xlsx(x = sensor_meta, path = "data/sensor_data/correlations/meta_units.xlsx")
+writexl::write_xlsx(x = chem_units, path = "data/sensor_data/correlations/chem_units.xlsx")
 
 ```
 

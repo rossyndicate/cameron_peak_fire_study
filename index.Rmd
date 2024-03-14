@@ -29,7 +29,8 @@ source("src/analysis_fxns/grab_sensor_data.R")
 ```{r}
 tidy_chem <- most_recent_chem%>%
   filter(Year > 2020)%>%
-  mutate(distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
+  mutate(Date = as.Date(Date,format = "%m/%d/%y"),
+         distance_upstream_km = case_when(site_code == "PFAL" ~ 73.9, TRUE ~ distance_upstream_km))%>%
   left_join(order_table, by = "site_code") 
 #site order now added to tidy chem and thus not needed
 rm(order_table)
